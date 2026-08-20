@@ -73,7 +73,7 @@ window.CODEV = (function () {
     // Public site = two-step: verify the password (no session persisted), then an emailed code.
     async passwordCheck({ email, password }) { await sb('/auth/v1/token?grant_type=password', { method: 'POST', anon: true, body: { email, password } }); return true; },
     async startSignup({ name, email, password, role }) { return sb('/auth/v1/signup', { method: 'POST', anon: true, body: { email, password, data: { name, role } } }); },
-    async sendEmailCode(email) { return sb('/auth/v1/otp', { method: 'POST', anon: true, body: { email, create_user: false } }); },
+    async sendEmailCode(email) { return sb('/auth/v1/otp', { method: 'POST', anon: true, body: { email, should_create_user: false } }); },
     async verifyEmailCode({ email, code }) { const d = await sb('/auth/v1/verify', { method: 'POST', anon: true, body: { email, token: String(code), type: 'email' } }); const s = await hydrate(d); s.mfa = { method: 'email', verified: true }; setSession(s); return s; },
     async signOut() { try { await sb('/auth/v1/logout', { method: 'POST' }); } catch {} setSession(null); },
     async refreshProfile() { const s = getSession(); if (!s) return null; const p = await fetchProfile(s.user.id); if (p) { s.profile = p; setSession(s); } return p; },
