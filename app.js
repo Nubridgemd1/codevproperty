@@ -100,13 +100,34 @@
   function fundingBar(p) { const f = funded(p); return `<div style="margin-top:8px"><div class="tiny muted spread"><span>Funding released</span><span>${f}%</span></div>
     <div style="height:6px;background:var(--line2);border-radius:6px;overflow:hidden;margin-top:3px"><div style="height:100%;width:${f}%;background:var(--green)"></div></div></div>`; }
 
+  // ---- co-developer marketing sections (ported from the demo, exact copy) ----
+  function flowStrip() { return `<div class="flowstrip">${['Discover', 'Qualify', 'Verify', 'Deal Room', 'Commit', 'Fund', 'Build', 'Monitor', 'Own / Exit'].map(s => `<span>${s}</span>`).join('<i>›</i>')}</div>`; }
+  function modelSection() { return `<section style="background:var(--soft);border-top:1px solid var(--line)"><div class="wrap" style="padding:48px 22px">
+    <div class="center" style="margin-bottom:22px"><span class="eyebrow">The Model</span><h2 style="margin:6px 0 0;font-size:28px">A transparent path from discovery to ownership</h2></div>
+    <div class="grid g4">${[['🔎', 'Discover & Qualify', 'Browse curated developments, then qualify privately — professional and selective, not a generic lead form.'], ['🛡️', 'Verify & Deal Room', 'Pass KYC, sign the NDA and enter a secure deal room with title, legal, QS and developer due-diligence.'], ['🏗️', 'Commit & Fund', 'Commit to a unit or SPV participation, e-sign the structure and fund on milestones through escrow.'], ['📈', 'Monitor & Own', 'Track certified construction evidence, payments and escrow releases to completion, title or exit.']].map(s => `<div class="card pad"><div style="font-size:26px;margin-bottom:8px">${s[0]}</div><h3 style="font-size:17px;margin:0 0 6px">${s[1]}</h3><p class="small muted" style="margin:0">${s[2]}</p></div>`).join('')}</div>
+  </div></section>`; }
+  function trustSection() { return `<section class="wrap" style="padding:48px 22px"><div class="grid g2" style="align-items:center;gap:30px">
+    <div><span class="eyebrow">Trust as a product</span><h2 style="font-size:28px;margin:8px 0 12px">Professional governance at every step</h2>
+      <p class="muted" style="margin-bottom:16px">Verified developers, a development approval committee, independent QS certification, and bank/escrow-controlled milestone releases — with a complete, immutable audit trail. Legal, banking and assurance are explicit participants, not afterthoughts.</p>
+      <div class="row" style="gap:8px">${['Verified developers', 'Legal & title review', 'Bank / escrow control', 'Independent QS assurance', 'Immutable audit trail'].map(x => `<span class="badge verified">✓ ${x}</span>`).join('')}</div></div>
+    <div class="card pad" style="background:var(--navy);color:#fff"><span class="eyebrow" style="color:var(--bronze2)">Milestone funding</span>
+      <h3 style="color:#fff;font-size:19px;margin:6px 0 14px">You fund progress, not promises</h3>
+      ${CFG.MILESTONE_TEMPLATE.map(m => `<div class="spread" style="font-size:13px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.1)"><span style="color:#c6d2de">${m.name}</span><b style="color:var(--bronze2)">${m.pct}%</b></div>`).join('')}
+      <p class="tiny" style="color:#9fb0c0;margin-top:12px">Illustrative schedule — each development sets its own certified milestones.</p></div>
+  </div></section>`; }
+  function ctaSection() { return `<section style="background:var(--soft);border-top:1px solid var(--line)"><div class="wrap center" style="padding:48px 22px">
+    <span class="eyebrow">Ready to explore?</span><h2 style="font-size:30px;margin:8px 0 8px">Qualify as a co-developer</h2>
+    <p class="muted" style="max-width:560px;margin:0 auto 20px">Enter the platform as an investor to co-develop, a developer to list and raise capital, or a property owner to list your property — verified and governed end-to-end.</p>
+    <div class="row" style="justify-content:center;gap:10px"><a class="btn primary" href="#/opportunities">Explore opportunities</a><a class="btn" href="#/list">List a property</a></div>
+  </div></section>`; }
+
   // ---- views (return HTML strings; data passed in) ----
   const V = {
     home(opps, counts) { return `<section class="hero"><div class="wrap grid g2" style="padding:56px 22px;align-items:center">
       <div><span class="eyebrow">Nigeria · Ikoyi · VI · Lekki · Ikeja GRA</span>
         <h1 style="font-size:40px;line-height:1.08;margin:10px 0 14px">Co-develop verified property — before the developer's margin.</h1>
         <p class="muted" style="font-size:16px;max-width:46ch">List a property, get it verified, and co-develop with qualified capital on one governed platform. Every listing is reviewed and approved before it goes public.</p>
-        <div class="row" style="margin-top:22px"><a class="btn primary" href="#/opportunities">Explore opportunities</a><a class="btn" href="#/list">List a property</a></div></div>
+        <div class="row" style="margin-top:22px"><a class="btn primary" href="#/opportunities">Explore opportunities</a><a class="btn" href="#/list">List a property</a></div>${flowStrip()}</div>
       <div class="grid" style="gap:14px">
         <div class="card pad"><div class="spread">
           <div><div class="serif" style="font-size:26px;color:var(--navy)">${counts.opps}</div><div class="tiny muted">Verified opportunities</div></div>
@@ -115,7 +136,8 @@
         <div class="card pad" style="background:var(--navy);color:#fff"><div class="eyebrow" style="color:var(--bronze2)">Trust before conversion</div>
           <p style="margin:8px 0 0;font-size:14px;color:#dbe4ec">Listings from developers <b style="color:#fff">and</b> property owners are verified by our admin team before appearing here.</p></div></div></div></section>
       <section class="wrap" style="padding:44px 22px"><div class="spread" style="margin-bottom:18px"><div><span class="eyebrow">Curated opportunities</span><h2 style="margin:4px 0 0;font-size:27px">Featured developments</h2></div><a class="btn sm" href="#/opportunities">View all →</a></div>
-        <div class="grid g3">${opps.slice(0, 3).map(oppCard).join('') || empty('No verified opportunities yet.')}</div></section>`; },
+        <div class="grid g3">${opps.slice(0, 3).map(oppCard).join('') || empty('No verified opportunities yet.')}</div></section>
+      ${modelSection()}${trustSection()}${ctaSection()}`; },
     opportunities(opps) { return sec('All opportunities', 'Every listing here has been verified by our admin team.', `<div class="grid g3">${opps.map(oppCard).join('') || empty('No verified opportunities yet — check back soon.')}</div>`); },
     opp(p) { if (!p) return sec('Not available', '', empty('This development is not available.'));
       const ms = p.milestones || []; const pays = p.payments || [];

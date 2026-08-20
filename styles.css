@@ -67,6 +67,9 @@ tr:hover td{background:var(--soft);}
   background:var(--navy);color:#fff;padding:11px 18px;border-radius:10px;font-size:13.5px;font-weight:500;
   box-shadow:0 10px 30px rgba(0,0,0,.2);transition:.25s;z-index:200;}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+.flowstrip{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:20px;font-size:11px;font-weight:600;color:var(--ink2);}
+.flowstrip span{background:#fff;border:1px solid var(--line);border-radius:20px;padding:3px 10px;}
+.flowstrip i{color:var(--bronze);font-style:normal;}
 .modal-bg{position:fixed;inset:0;background:rgba(15,34,51,.5);display:none;align-items:center;justify-content:center;z-index:150;padding:20px;}
 .modal-bg.show{display:flex;}
 .modal{background:#fff;border-radius:16px;max-width:460px;width:100%;padding:26px;box-shadow:0 30px 80px rgba(0,0,0,.3);max-height:92vh;overflow:auto;}
