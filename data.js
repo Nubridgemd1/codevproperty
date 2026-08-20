@@ -34,7 +34,11 @@ window.CODEV = (function () {
 
   // ---- low-level Supabase fetch ----
   async function sb(path, { method = 'GET', body, prefer, anon = false } = {}) {
-    const headers = { apikey: KEY, Authorization: 'Bearer ' + ((!anon && token()) || KEY) };
+    const isAuth = path.indexOf('/auth/') === 0;          // GoTrue endpoints
+    const tk = anon ? null : token();                     // real user JWT, if any
+    const headers = { apikey: KEY };
+    if (tk) headers.Authorization = 'Bearer ' + tk;       // authenticated request
+    else if (!isAuth) headers.Authorization = 'Bearer ' + KEY; // anon REST (publishable ok as bearer); auth endpoints get none
     if (body) headers['Content-Type'] = 'application/json';
     if (prefer) headers.Prefer = prefer;
     const res = await fetch(BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
