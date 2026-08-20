@@ -64,13 +64,27 @@ window.CODEV = (function () {
     },
     async signIn({ email, password }) {
       const d = await sb('/auth/v1/token?grant_type=password', { method: 'POST', anon: true, body: { email, password } });
-      return hydrate(d);
+      const sess = await hydrate(d);
+      try { const facs = await sbAuth.listFactors(); const v = facs.filter(f => f.status === 'verified');
+        sess.mfa = { enrolled: v.length > 0, factorId: v[0] && v[0].id, aal: aalOf(sess.access_token) }; setSession(sess); } catch {}
+      return sess;
     },
     async signOut() { try { await sb('/auth/v1/logout', { method: 'POST' }); } catch {} setSession(null); },
     async refreshProfile() { const s = getSession(); if (!s) return null; const p = await fetchProfile(s.user.id); if (p) { s.profile = p; setSession(s); } return p; },
+    // ---- MFA (TOTP) ----
+    async listFactors() { try { const r = await sb('/auth/v1/factors'); if (Array.isArray(r)) return r; if (r && r.totp) return r.totp; if (r && r.all) return r.all; return []; } catch { return []; } },
+    async enrollTOTP() { return sb('/auth/v1/factors', { method: 'POST', body: { factor_type: 'totp', friendly_name: 'CoDevelop-' + Date.now() } }); },
+    async mfaChallenge(factorId) { return sb('/auth/v1/factors/' + factorId + '/challenge', { method: 'POST' }); },
+    async mfaVerify(factorId, challengeId, code) {
+      const d = await sb('/auth/v1/factors/' + factorId + '/verify', { method: 'POST', body: { challenge_id: challengeId, code: String(code) } });
+      if (d.access_token) { const s = getSession(); if (s) { s.access_token = d.access_token; s.refresh_token = d.refresh_token || s.refresh_token; s.mfa = { enrolled: true, factorId, aal: 'aal2' }; setSession(s); } }
+      return d;
+    },
+    mfaOk() { const s = getSession(); return !!(s && s.mfa && s.mfa.aal === 'aal2'); },
   };
+  function aalOf(tok) { try { const p = JSON.parse(atob(tok.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return p.aal || 'aal1'; } catch { return 'aal1'; } }
   async function hydrate(d) {
-    const user = d.user || {}; const sess = { access_token: d.access_token, refresh_token: d.refresh_token, user: { id: user.id, email: user.email } };
+    const user = d.user || {}; const sess = { access_token: d.access_token, refresh_token: d.refresh_token, user: { id: user.id, email: user.email }, mfa: { enrolled: false, aal: aalOf(d.access_token || '') } };
     setSession(sess);
     let p = null; for (let i = 0; i < 4 && !p; i++) { try { p = await fetchProfile(user.id); } catch {} if (!p) await new Promise(r => setTimeout(r, 450)); }
     sess.profile = p; setSession(sess); return sess;
@@ -131,6 +145,7 @@ window.CODEV = (function () {
       if (!a) throw new Error('Invalid email or password'); wr(L.sess, { id: a.id, name: a.name, email: a.email, role: a.role }); return a; },
     async signOut() { localStorage.removeItem(L.sess); },
     async refreshProfile() { return rd(L.sess, null); },
+    mfaOk() { return true; }, async listFactors() { return []; },
   };
   const localDB = {
     properties: {
