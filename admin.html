@@ -10,41 +10,29 @@
 <link rel="stylesheet" href="styles.css" />
 <style>
   body{background:var(--soft)}
-  .adminbar{background:var(--navy);color:#fff}
-  .adminbar .logo{border-color:var(--bronze2);color:#fff}
-  .adminbar .brand b{color:#fff}
+  .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
   .tabs{display:flex;gap:4px;background:#fff;border:1px solid var(--line);border-radius:11px;padding:4px;width:max-content}
   .tab{padding:8px 16px;border-radius:8px;font-weight:600;font-size:14px;color:var(--ink2);cursor:pointer;border:none;background:none}
   .tab.active{background:var(--navy);color:#fff}
   .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px}
-  .stat .n{font-family:'Fraunces',serif;font-size:26px;color:var(--navy)}
-  .stat .l{font-size:12px;color:var(--ink2);margin-top:2px}
-  .gate{max-width:400px;margin:8vh auto;padding:28px}
+  .stat .n{font-family:'Fraunces',serif;font-size:26px;color:var(--navy)}.stat .l{font-size:12px;color:var(--ink2);margin-top:2px}
+  .gate{max-width:420px;margin:8vh auto;padding:28px}
+  .subrow td{padding:6px 8px}.subrow input,.subrow select{padding:6px 8px;font-size:13px}
 </style>
 </head>
 <body>
 
-<div id="gate" class="gate card">
-  <div class="brand" style="justify-content:center;margin-bottom:14px"><span class="logo" style="border-color:var(--bronze)">C</span><span><b>CoDevelop</b><small>Admin Console</small></span></div>
-  <p class="small muted center">Enter the admin passcode to manage accounts and verify listings.</p>
-  <form onsubmit="return ADMIN.unlock(event)" style="margin-top:14px">
-    <div class="field"><label>Passcode</label><input id="pc" type="password" autofocus placeholder="admin passcode"></div>
-    <button class="btn primary" style="width:100%">Unlock console</button>
-    <p class="tiny muted center" style="margin-top:10px">Demo passcode: <b>admin2026</b> · client-side gate only (production uses real auth + MFA).</p>
-  </form>
-</div>
+<div id="gate" class="gate card"></div>
 
 <div id="console" class="hide">
   <div class="adminbar"><div class="wrap spread" style="padding:14px 22px">
     <div class="brand"><span class="logo">C</span><span><b>CoDevelop</b><small>Admin Console</small></span></div>
-    <div class="row" style="gap:8px"><a class="btn ghost sm" style="color:#cfdbe6" href="index.html" target="_blank">View site ↗</a>
-      <button class="btn sm" onclick="ADMIN.lock()">Lock</button></div>
+    <div class="row" style="gap:8px"><span class="badge role" id="who"></span><a class="btn ghost sm" style="color:#cfdbe6" href="index.html" target="_blank">View site ↗</a><button class="btn sm" onclick="ADMIN.lock()">Lock</button></div>
   </div></div>
-
   <div class="wrap" style="padding:24px 22px">
     <div class="grid g4" id="stats" style="margin-bottom:20px"></div>
     <div class="tabs" style="margin-bottom:18px">
-      <button class="tab active" data-t="properties" onclick="ADMIN.tab('properties')">Properties</button>
+      <button class="tab active" data-t="properties" onclick="ADMIN.tab('properties')">Properties &amp; milestones</button>
       <button class="tab" data-t="accounts" onclick="ADMIN.tab('accounts')">Accounts</button>
     </div>
     <div id="panel"></div>
@@ -52,112 +40,159 @@
 </div>
 
 <div class="toast" id="toast"></div>
-
-<!-- edit modal -->
-<div class="modal-bg" id="modal"><div class="modal wide">
-  <div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div>
-  <div id="mBody"></div>
-</div></div>
+<div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
 <script src="data.js"></script>
 <script>
 (function(){
-  const { CFG, store, fmtN, esc } = window.CODEV;
+  const { CFG, auth, db, fmtN, esc } = window.CODEV;
   const $ = (s)=>document.querySelector(s);
-  let curTab = 'properties';
-  function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+  let curTab='properties'; let PROPS=[], ACCS=[];
+  const toast=(m)=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2800);};
 
-  function unlock(e){e.preventDefault();
-    if($('#pc').value===CFG.ADMIN_PASSCODE){sessionStorage.setItem('codev_admin','1');show();}
-    else toast('Incorrect passcode');return false;}
-  function lock(){sessionStorage.removeItem('codev_admin');$('#console').classList.add('hide');$('#gate').classList.remove('hide');}
-  function show(){$('#gate').classList.add('hide');$('#console').classList.remove('hide');render();}
-
-  function render(){renderStats();tab(curTab);}
-  function renderStats(){
-    const A=store.accounts.list(),P=store.properties.list();
-    const st=[['Properties',P.length],['Pending review',P.filter(p=>p.status==='pending').length],
-      ['Accounts',A.length],['Verified live',P.filter(p=>p.status==='verified').length]];
-    $('#stats').innerHTML=st.map(s=>`<div class="stat"><div class="n">${s[1]}</div><div class="l">${s[0]}</div></div>`).join('');
+  // ---------- gate ----------
+  function renderGate(){
+    $('#gate').innerHTML = `<div class="brand" style="justify-content:center;margin-bottom:14px"><span class="logo" style="border-color:var(--bronze)">C</span><span><b>CoDevelop</b><small>Admin Console</small></span></div>
+      <p class="small muted center">${CFG.configured?'Sign in with your admin account.':'Enter the admin passcode.'}</p>
+      <form onsubmit="return ADMIN.login(event)" style="margin-top:14px">
+        ${CFG.configured?`<div class="field"><label>Admin email</label><input id="aEmail" type="email" required autofocus placeholder="admin@codevproperty.com"></div>
+          <div class="field"><label>Password</label><input id="aPass" type="password" required></div>`
+          :`<div class="field"><label>Passcode</label><input id="aPass" type="password" required autofocus></div>`}
+        <button class="btn primary" style="width:100%" id="loginBtn">Unlock console</button>
+        <p class="tiny muted center" style="margin-top:10px">${CFG.configured?'Real authentication via Supabase. Only accounts with the admin role may enter.':'Demo passcode: <b>admin2026</b>'}</p>
+      </form>`;
   }
-  function tab(t){curTab=t;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.t===t));
-    $('#panel').innerHTML = t==='accounts'?accountsPanel():propertiesPanel();}
+  async function login(e){e.preventDefault(); const btn=$('#loginBtn'); btn.disabled=true; btn.textContent='Checking…';
+    try{
+      if(CFG.configured){
+        await auth.signIn({email:$('#aEmail').value.trim(), password:$('#aPass').value});
+        await auth.refreshProfile(); const p=auth.profile();
+        if(!p || p.role!=='admin'){ await auth.signOut(); toast('That account is not an admin'); btn.disabled=false; btn.textContent='Unlock console'; return false; }
+      } else {
+        if($('#aPass').value!==(CFG.ADMIN_PASSCODE||'admin2026')){ toast('Incorrect passcode'); btn.disabled=false; btn.textContent='Unlock console'; return false; }
+        sessionStorage.setItem('codev_admin','1');
+      }
+      await show();
+    }catch(err){ toast(err.message||'Login failed'); btn.disabled=false; btn.textContent='Unlock console'; }
+    return false;
+  }
+  async function lock(){ if(CFG.configured) await auth.signOut(); else sessionStorage.removeItem('codev_admin'); location.reload(); }
+
+  async function show(){
+    $('#gate').classList.add('hide'); $('#console').classList.remove('hide');
+    if(CFG.configured){ const p=auth.profile(); $('#who').textContent=(p&&p.name?p.name:'Admin')+' · admin'; } else $('#who').textContent='Admin';
+    await load();
+  }
+  async function load(){
+    $('#panel').innerHTML='<div class="card pad muted">Loading…</div>';
+    try{ PROPS=await db.properties.listAll(); ACCS=CFG.configured?await db.profiles.listAll():await db.profiles.listAll(); }
+    catch(err){ toast(err.message||'Load failed'); }
+    renderStats(); tab(curTab);
+  }
+  function renderStats(){ const st=[['Properties',PROPS.length],['Pending review',PROPS.filter(p=>p.status==='pending').length],['Accounts',ACCS.length],['Verified live',PROPS.filter(p=>p.status==='verified').length]];
+    $('#stats').innerHTML=st.map(s=>`<div class="stat"><div class="n">${s[1]}</div><div class="l">${s[0]}</div></div>`).join(''); }
+  function tab(t){ curTab=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.t===t)); $('#panel').innerHTML = t==='accounts'?accountsPanel():propertiesPanel(); }
 
   // ---------- PROPERTIES ----------
+  function fundedPct(p){ return (p.milestones||[]).filter(m=>m.status==='certified').reduce((n,m)=>n+(Number(m.pct)||0),0); }
   function propertiesPanel(){
-    const P=store.properties.list();
-    const rows=P.map(p=>`<tr>
-      <td><b>${esc(p.title)}</b><div class="tiny muted">${esc(p.location)}</div></td>
-      <td>${esc(p.developer)}<div class="tiny muted">${esc(p.submittedBy)} · <span class="badge role">${p.submittedByRole||'—'}</span></div></td>
-      <td>${fmtN(p.priceFrom)}<div class="tiny muted">${esc(p.stage)}</div></td>
+    const rows=PROPS.map(p=>`<tr>
+      <td><b>${esc(p.title)}</b><div class="tiny muted">${esc(p.location)} · funded ${fundedPct(p)}%</div></td>
+      <td>${esc(p.developer||'')}<div class="tiny muted">${esc(p.submittedBy||'')} · <span class="badge role">${p.submittedByRole||'—'}</span></div></td>
+      <td>${fmtN(p.priceFrom)}<div class="tiny muted">${esc(p.stage||'')}</div></td>
       <td><span class="badge ${p.status}">${p.status}</span></td>
       <td style="white-space:nowrap;text-align:right">
         ${p.status!=='verified'?`<button class="btn sm" style="color:var(--green);border-color:#cfe6da" onclick="ADMIN.setStatus('${p.id}','verified')">✓ Verify</button>`:''}
         ${p.status!=='rejected'?`<button class="btn sm danger" onclick="ADMIN.setStatus('${p.id}','rejected')">Reject</button>`:''}
-        <button class="btn sm" onclick="ADMIN.editProp('${p.id}')">Edit</button>
-        <button class="btn ghost sm" onclick="ADMIN.delProp('${p.id}')">🗑</button>
-      </td></tr>`).join('');
-    return `<div class="card"><div style="overflow-x:auto"><table><thead><tr>
-      <th>Property</th><th>Lister</th><th>From / Stage</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
-      <tbody>${rows||`<tr><td colspan="5" class="center muted" style="padding:24px">No properties listed yet.</td></tr>`}</tbody></table></div></div>
-      <p class="tiny muted" style="margin-top:10px">Verify a listing to publish it on the public site. Listings come from developers and property owners (visitors) alike.</p>`;
+        <button class="btn sm navy" onclick="ADMIN.editProp('${p.id}')">Edit · milestones</button>
+        <button class="btn ghost sm" onclick="ADMIN.delProp('${p.id}')">🗑</button></td></tr>`).join('');
+    return `<div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Property</th><th>Lister</th><th>From / Stage</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+      <tbody>${rows||`<tr><td colspan="5" class="center muted" style="padding:24px">No properties yet.</td></tr>`}</tbody></table></div></div>
+      <p class="tiny muted" style="margin-top:10px">Verify to publish. “Edit · milestones” lets you modify details, the milestone timeline and payments. Listings come from developers and property owners alike.</p>`;
   }
-  function setStatus(id,s){store.properties.setStatus(id,s);toast('Listing '+(s==='verified'?'verified & published':s));render();}
-  function delProp(id){const p=store.properties.byId(id);if(confirm('Delete "'+p.title+'"? This cannot be undone.')){store.properties.remove(id);toast('Listing deleted');render();}}
-  function editProp(id){const p=store.properties.byId(id);$('#mTitle').textContent='Edit listing';
+  async function setStatus(id,s){ try{ await db.properties.setStatus(id,s); toast('Listing '+(s==='verified'?'verified & published':s)); await load(); }catch(err){toast(err.message);} }
+  async function delProp(id){ const p=PROPS.find(x=>x.id===id); if(confirm('Delete "'+p.title+'"?')){ try{ await db.properties.remove(id); toast('Listing deleted'); await load(); }catch(err){toast(err.message);} } }
+
+  let EDIT=null;
+  function editProp(id){ const p=PROPS.find(x=>x.id===id); EDIT={ id, milestones:JSON.parse(JSON.stringify(p.milestones||[])), payments:JSON.parse(JSON.stringify(p.payments||[])) };
+    $('#mTitle').textContent='Edit: '+p.title;
     $('#mBody').innerHTML=`<form onsubmit="return ADMIN.saveProp(event,'${id}')">
       <div class="field"><label>Title</label><input name="title" value="${esc(p.title)}" required></div>
-      <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Developer / owner</label><input name="developer" value="${esc(p.developer)}"></div>
-      <div class="field" style="flex:1"><label>Location</label><input name="location" value="${esc(p.location)}"></div></div>
-      <div class="field"><label>Summary</label><textarea name="summary" rows="3">${esc(p.summary)}</textarea></div>
-      <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Participation from (₦)</label><input name="priceFrom" type="number" value="${p.priceFrom}"></div>
-      <div class="field" style="flex:1"><label>Stage</label><select name="stage">${CFG.STAGES.map(x=>`<option ${x===p.stage?'selected':''}>${x}</option>`).join('')}</select></div></div>
-      <div class="field"><label>Status</label><select name="status">${['pending','verified','rejected'].map(x=>`<option ${x===p.status?'selected':''}>${x}</option>`).join('')}</select></div>
-      <button class="btn primary" style="width:100%">Save changes</button></form>`;
-    $('#modal').classList.add('show');}
-  function saveProp(e,id){e.preventDefault();const f=e.target;
-    store.properties.update(id,{title:f.title.value.trim(),developer:f.developer.value.trim(),location:f.location.value.trim(),
-      summary:f.summary.value.trim(),priceFrom:Number(f.priceFrom.value),stage:f.stage.value,status:f.status.value,
-      verifiedAt:f.status.value==='verified'?(store.properties.byId(id).verifiedAt||window.CODEV.now()):undefined});
-    closeModal();toast('Listing updated');render();return false;}
+      <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Developer / owner</label><input name="developer" value="${esc(p.developer||'')}"></div>
+        <div class="field" style="flex:1"><label>Location</label><input name="location" value="${esc(p.location||'')}"></div></div>
+      <div class="field"><label>Summary</label><textarea name="summary" rows="2">${esc(p.summary||'')}</textarea></div>
+      <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Participation from (₦)</label><input name="priceFrom" type="number" value="${p.priceFrom||0}"></div>
+        <div class="field" style="flex:1"><label>Stage</label><select name="stage">${CFG.STAGES.map(x=>`<option ${x===p.stage?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div class="field" style="flex:1"><label>Status</label><select name="status">${['pending','verified','rejected'].map(x=>`<option ${x===p.status?'selected':''}>${x}</option>`).join('')}</select></div></div>
+
+      <div class="spread" style="margin:6px 0 4px"><label style="margin:0">Milestones &amp; timeline</label><button type="button" class="btn sm" onclick="ADMIN.addMs()">+ Milestone</button></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Milestone</th><th>%</th><th>Target date</th><th>Status</th><th></th></tr></thead><tbody id="msRows"></tbody></table></div>
+
+      <div class="spread" style="margin:14px 0 4px"><label style="margin:0">Payments &amp; capital calls</label><button type="button" class="btn sm" onclick="ADMIN.addPay()">+ Payment</button></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Label</th><th>Amount (₦)</th><th>Due date</th><th>Status</th><th></th></tr></thead><tbody id="payRows"></tbody></table></div>
+
+      <button class="btn primary" style="width:100%;margin-top:14px">Save changes</button></form>`;
+    renderMs(); renderPay(); $('#modal').classList.add('show');
+  }
+  function renderMs(){ $('#msRows').innerHTML=EDIT.milestones.map((m,i)=>`<tr class="subrow">
+    <td><input value="${esc(m.name||'')}" onchange="ADMIN.msSet(${i},'name',this.value)"></td>
+    <td style="width:70px"><input type="number" value="${m.pct||0}" onchange="ADMIN.msSet(${i},'pct',Number(this.value))"></td>
+    <td style="width:150px"><input type="date" value="${esc(m.targetDate||'')}" onchange="ADMIN.msSet(${i},'targetDate',this.value)"></td>
+    <td style="width:130px"><select onchange="ADMIN.msSet(${i},'status',this.value)">${CFG.MILESTONE_STATUS.map(s=>`<option ${s===m.status?'selected':''}>${s}</option>`).join('')}</select></td>
+    <td><button type="button" class="btn ghost sm" onclick="ADMIN.delMs(${i})">✕</button></td></tr>`).join('')||`<tr><td colspan="5" class="tiny muted">No milestones — add one.</td></tr>`; }
+  function renderPay(){ $('#payRows').innerHTML=EDIT.payments.map((p,i)=>`<tr class="subrow">
+    <td><input value="${esc(p.label||'')}" onchange="ADMIN.paySet(${i},'label',this.value)"></td>
+    <td style="width:120px"><input type="number" value="${p.amount||0}" onchange="ADMIN.paySet(${i},'amount',Number(this.value))"></td>
+    <td style="width:150px"><input type="date" value="${esc(p.dueDate||'')}" onchange="ADMIN.paySet(${i},'dueDate',this.value)"></td>
+    <td style="width:110px"><select onchange="ADMIN.paySet(${i},'status',this.value)">${CFG.PAYMENT_STATUS.map(s=>`<option ${s===p.status?'selected':''}>${s}</option>`).join('')}</select></td>
+    <td><button type="button" class="btn ghost sm" onclick="ADMIN.delPay(${i})">✕</button></td></tr>`).join('')||`<tr><td colspan="5" class="tiny muted">No payments — add capital calls / releases.</td></tr>`; }
+  function msSet(i,k,v){ EDIT.milestones[i][k]=v; } function delMs(i){ EDIT.milestones.splice(i,1); renderMs(); } function addMs(){ EDIT.milestones.push({name:'',pct:0,status:'pending',targetDate:'',releasedDate:''}); renderMs(); }
+  function paySet(i,k,v){ EDIT.payments[i][k]=v; } function delPay(i){ EDIT.payments.splice(i,1); renderPay(); } function addPay(){ EDIT.payments.push({label:'',amount:0,dueDate:'',status:'due'}); renderPay(); }
+  async function saveProp(e,id){ e.preventDefault(); const f=e.target;
+    try{ await db.properties.update(id,{ title:f.title.value.trim(), developer:f.developer.value.trim(), location:f.location.value.trim(), summary:f.summary.value.trim(),
+      priceFrom:Number(f.priceFrom.value), stage:f.stage.value, status:f.status.value, milestones:EDIT.milestones, payments:EDIT.payments,
+      verifiedAt:f.status.value==='verified'?window.CODEV.now():null });
+      closeModal(); toast('Listing, milestones & payments updated'); await load();
+    }catch(err){ toast(err.message||'Save failed'); } return false; }
 
   // ---------- ACCOUNTS ----------
   function accountsPanel(){
-    const A=store.accounts.list();
-    const rows=A.map(a=>`<tr>
-      <td><b>${esc(a.name)}</b><div class="tiny muted">${esc(a.email)}</div></td>
-      <td>${a.role==='admin'?'<span class="badge role" style="background:#e9dfc7;color:#8a6113">admin</span>':`<select onchange="ADMIN.setRole('${a.id}',this.value)" style="padding:5px 8px;width:auto">${['investor','developer','visitor'].map(r=>`<option ${r===a.role?'selected':''}>${r}</option>`).join('')}</select>`}</td>
-      <td><span class="badge ${a.status==='active'?'verified':'pending'}">${a.status}</span></td>
-      <td class="tiny muted">${new Date(a.createdAt).toLocaleDateString()}</td>
-      <td style="white-space:nowrap;text-align:right">
-        ${a.role!=='admin'?`<button class="btn sm" onclick="ADMIN.toggleStatus('${a.id}')">${a.status==='active'?'Suspend':'Activate'}</button>
-        <button class="btn ghost sm" onclick="ADMIN.delAcc('${a.id}')">🗑</button>`:'<span class="tiny muted">protected</span>'}
-      </td></tr>`).join('');
-    return `<div class="spread" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px">Accounts</h3>
-      <button class="btn primary sm" onclick="ADMIN.addAcc()">+ Add account</button></div>
-      <div class="card"><div style="overflow-x:auto"><table><thead><tr>
-      <th>Name</th><th>Role</th><th>Status</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
-      <tbody>${rows}</tbody></table></div></div>`;
+    const rows=ACCS.map(a=>`<tr>
+      <td><b>${esc(a.name||'—')}</b><div class="tiny muted">${esc(a.email||'')}</div></td>
+      <td>${a.role==='admin'?'<span class="badge role" style="background:#e9dfc7;color:#8a6113">admin</span>':`<select onchange="ADMIN.setRole('${a.id}',this.value)" style="padding:5px 8px;width:auto">${['investor','developer','visitor','admin'].map(r=>`<option ${r===a.role?'selected':''}>${r}</option>`).join('')}</select>`}</td>
+      <td><span class="badge ${a.status==='active'?'verified':'pending'}">${a.status||'active'}</span></td>
+      <td class="tiny muted">${a.createdAt?new Date(a.createdAt).toLocaleDateString():''}</td>
+      <td style="white-space:nowrap;text-align:right"><button class="btn sm" onclick="ADMIN.toggleStatus('${a.id}','${a.status||'active'}')">${(a.status||'active')==='active'?'Suspend':'Activate'}</button>
+        <button class="btn ghost sm" onclick="ADMIN.delAcc('${a.id}')">🗑</button></td></tr>`).join('');
+    return `<div class="spread" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px">Accounts</h3><button class="btn primary sm" onclick="ADMIN.addAcc()">+ Add account</button></div>
+      <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
+      <tbody>${rows||`<tr><td colspan="5" class="center muted" style="padding:20px">No accounts yet.</td></tr>`}</tbody></table></div></div>
+      ${CFG.configured?'<p class="tiny muted" style="margin-top:10px">Adding an account creates a real login. Deleting removes their profile (they lose access).</p>':''}`;
   }
-  function addAcc(){$('#mTitle').textContent='Add account';
+  function addAcc(){ $('#mTitle').textContent='Add account';
     $('#mBody').innerHTML=`<form onsubmit="return ADMIN.saveAcc(event)">
       <div class="field"><label>Full name / company</label><input name="name" required></div>
       <div class="field"><label>Email</label><input name="email" type="email" required></div>
       <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Role</label><select name="role">${['investor','developer','visitor','admin'].map(r=>`<option>${r}</option>`).join('')}</select></div>
-      <div class="field" style="flex:1"><label>Temp password</label><input name="pass" value="changeme" required></div></div>
+        <div class="field" style="flex:1"><label>Temp password</label><input name="pass" value="Codev1234" required minlength="6"></div></div>
       <button class="btn primary" style="width:100%">Create account</button></form>`;
-    $('#modal').classList.add('show');}
-  function saveAcc(e){e.preventDefault();const f=e.target;
-    try{store.accounts.add({name:f.name.value.trim(),email:f.email.value.trim(),role:f.role.value,pass:f.pass.value});
-      closeModal();toast('Account created');render();}catch(err){toast(err.message);}return false;}
-  function setRole(id,role){store.accounts.update(id,{role});toast('Role updated');renderStats();}
-  function toggleStatus(id){const a=store.accounts.byId(id);store.accounts.update(id,{status:a.status==='active'?'suspended':'active'});toast('Account '+(a.status==='active'?'suspended':'activated'));render();}
-  function delAcc(id){const a=store.accounts.byId(id);if(confirm('Delete account "'+a.name+'" ('+a.email+')? This cannot be undone.')){store.accounts.remove(id);toast('Account deleted');render();}}
+    $('#modal').classList.add('show'); }
+  async function saveAcc(e){ e.preventDefault(); const f=e.target;
+    try{ const role=f.role.value; const d=await db.profiles.add({name:f.name.value.trim(),email:f.email.value.trim(),role,password:f.pass.value});
+      const newId=d && d.user && d.user.id; if(newId && CFG.configured){ try{ await db.profiles.update(newId,{role,name:f.name.value.trim(),status:'active'}); }catch{} }
+      closeModal(); toast('Account created'); await load();
+    }catch(err){ toast(err.message||'Could not create'); } return false; }
+  async function setRole(id,role){ try{ await db.profiles.update(id,{role}); toast('Role updated'); await load(); }catch(err){toast(err.message);} }
+  async function toggleStatus(id,cur){ try{ await db.profiles.update(id,{status:cur==='active'?'suspended':'active'}); toast('Account '+(cur==='active'?'suspended':'activated')); await load(); }catch(err){toast(err.message);} }
+  async function delAcc(id){ const a=ACCS.find(x=>x.id===id); if(confirm('Delete account "'+(a.name||a.email)+'"?')){ try{ await db.profiles.remove(id); toast('Account deleted'); await load(); }catch(err){toast(err.message);} } }
 
-  function closeModal(){$('#modal').classList.remove('show');}
+  function closeModal(){ $('#modal').classList.remove('show'); }
+  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,addMs,delMs,msSet,addPay,delPay,paySet,addAcc,saveAcc,setRole,toggleStatus,delAcc,closeModal};
 
-  window.ADMIN={unlock,lock,tab,setStatus,delProp,editProp,saveProp,addAcc,saveAcc,setRole,toggleStatus,delAcc,closeModal};
-  if(sessionStorage.getItem('codev_admin')==='1')show();
+  renderGate();
+  // auto-resume
+  if(CFG.configured){ const p=auth.profile(); if(p&&p.role==='admin') show(); }
+  else if(sessionStorage.getItem('codev_admin')==='1') show();
 })();
 </script>
 </body>

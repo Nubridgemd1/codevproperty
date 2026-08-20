@@ -1,104 +1,162 @@
-/* CoDevelop — data & store layer.
- * Works standalone on localStorage (per-browser demo of the real flows).
- * "Real when configured": set SUPABASE_URL + SUPABASE_KEY below and the same store API
- * can be pointed at Supabase tables (accounts, properties) for real, multi-user, cross-device data.
+/* CoDevelop — data, auth & store layer.
+ * Supabase-backed (real Auth + Postgres + RLS) when configured; localStorage fallback otherwise.
+ * All store/auth methods are async (return Promises).
  */
 window.CODEV = (function () {
+  const RAW_URL = 'https://zfjwbdfaxgvdwepmkwce.supabase.co/rest/v1/';
+  const KEY = 'sb_publishable_cCeODQr-6RbZQ98vQ1awnA_FK5wiljs';
+  const BASE = RAW_URL.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
+  const configured = !!(BASE && KEY && KEY.indexOf('sb_') === 0);
+
   const CFG = {
-    brand: 'CoDevelop',
-    tagline: 'Property Co-Development',
-    // Leave blank for local mode. When set, wire the async adapter (see README) for shared data.
-    SUPABASE_URL: '',
-    SUPABASE_KEY: '',
-    ADMIN_PASSCODE: 'admin2026',
-    ROLES: ['investor', 'developer', 'visitor'], // admin is separate
+    brand: 'CoDevelop', tagline: 'Property Co-Development', configured,
+    ADMIN_EMAIL: 'admin@codevproperty.com',
+    ROLES: ['investor', 'developer', 'visitor'],
     STAGES: ['Land / Commencement', 'Foundation', 'Structural Frame', 'Building Envelope',
              'Mechanical & Electrical', 'Finishing', 'Completion / Handover'],
+    // Default milestone schedule (name + % of funding released). Admin can edit per development.
+    MILESTONE_TEMPLATE: [
+      { name: 'Commitment / SPV Entry', pct: 10 }, { name: 'Land / Commencement', pct: 15 },
+      { name: 'Foundation', pct: 15 }, { name: 'Structural Frame', pct: 20 },
+      { name: 'Building Envelope / Roofing', pct: 10 }, { name: 'Mechanical & Electrical', pct: 10 },
+      { name: 'Finishing', pct: 15 }, { name: 'Completion / Handover', pct: 5 },
+    ],
+    MILESTONE_STATUS: ['pending', 'in-progress', 'certified'],
+    PAYMENT_STATUS: ['due', 'paid'],
   };
+  const defaultMilestones = () => CFG.MILESTONE_TEMPLATE.map(m => ({ name: m.name, pct: m.pct, status: 'pending', targetDate: '', releasedDate: '' }));
 
-  const K = { acc: 'codev_accounts', prop: 'codev_properties', sess: 'codev_session', seed: 'codev_seeded_v1' };
-  const read = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
-  const write = (k, v) => localStorage.setItem(k, JSON.stringify(v));
-  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-  const now = () => new Date().toISOString();
-  const hash = (s) => btoa(unescape(encodeURIComponent(s || ''))); // demo only — not real hashing
+  const SKEY = 'codev_sb_session';
+  const getSession = () => { try { return JSON.parse(localStorage.getItem(SKEY)); } catch { return null; } };
+  const setSession = (s) => s ? localStorage.setItem(SKEY, JSON.stringify(s)) : localStorage.removeItem(SKEY);
+  const token = () => { const s = getSession(); return s && s.access_token; };
+  const nowISO = () => new Date().toISOString();
 
-  // ---- seed on first load ----
-  function seed() {
-    if (read(K.seed, false)) return;
-    const accounts = [
-      { id: uid(), name: 'Platform Admin', email: 'admin@codevproperty.com', pass: hash('admin2026'), role: 'admin', status: 'active', createdAt: now() },
-      { id: uid(), name: 'Meridian Developments', email: 'dev@meridian.example', pass: hash('demo1234'), role: 'developer', status: 'active', createdAt: now() },
-      { id: uid(), name: 'Adaeze Okafor', email: 'investor@example.com', pass: hash('demo1234'), role: 'investor', status: 'active', createdAt: now() },
-    ];
-    const properties = [
-      { id: uid(), title: 'Ivory Residences', developer: 'Meridian Developments', location: 'Ikoyi, Lagos',
-        summary: '24 curated waterfront-adjacent residences in the heart of Ikoyi.', priceFrom: 45000000,
-        stage: 'Foundation', status: 'verified', submittedByRole: 'developer', submittedBy: 'dev@meridian.example', createdAt: now(), verifiedAt: now() },
-      { id: uid(), title: 'Marina Heights', developer: 'Atlas Urban', location: 'Victoria Island, Lagos',
-        summary: 'A landmark mixed-use tower — residences, offices and retail on VI.', priceFrom: 38000000,
-        stage: 'Structural Frame', status: 'verified', submittedByRole: 'developer', submittedBy: 'atlas@example.com', createdAt: now(), verifiedAt: now() },
-      { id: uid(), title: 'Lekki Palms Estate', developer: 'Coastline Projects', location: 'Lekki, Lagos',
-        summary: 'A 120-home gated estate with parks, retail and 24/7 security.', priceFrom: 22000000,
-        stage: 'Land / Commencement', status: 'verified', submittedByRole: 'developer', submittedBy: 'coast@example.com', createdAt: now(), verifiedAt: now() },
-      { id: uid(), title: 'Ikeja GRA Duplex Plot', developer: 'Private lister', location: 'Ikeja GRA, Lagos',
-        summary: 'Owner-listed plot with approved building plan — seeking co-development partners.', priceFrom: 15000000,
-        stage: 'Land / Commencement', status: 'pending', submittedByRole: 'visitor', submittedBy: 'visitor@example.com', createdAt: now() },
-    ];
-    write(K.acc, accounts); write(K.prop, properties); write(K.seed, true);
+  // ---- low-level Supabase fetch ----
+  async function sb(path, { method = 'GET', body, prefer, anon = false } = {}) {
+    const headers = { apikey: KEY, Authorization: 'Bearer ' + ((!anon && token()) || KEY) };
+    if (body) headers['Content-Type'] = 'application/json';
+    if (prefer) headers.Prefer = prefer;
+    const res = await fetch(BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    const txt = await res.text(); let data; try { data = txt ? JSON.parse(txt) : null; } catch { data = txt; }
+    if (!res.ok) throw new Error((data && (data.message || data.error_description || data.msg || data.error)) || ('Request failed (' + res.status + ')'));
+    return data;
   }
-  seed();
 
-  // ---- store API (sync/local; mirror these signatures for a Supabase adapter) ----
-  const store = {
-    accounts: {
-      list: () => read(K.acc, []),
-      byId: (id) => read(K.acc, []).find(a => a.id === id),
-      byEmail: (e) => read(K.acc, []).find(a => (a.email || '').toLowerCase() === (e || '').toLowerCase()),
-      add(a) {
-        const list = read(K.acc, []);
-        if (list.some(x => (x.email || '').toLowerCase() === (a.email || '').toLowerCase()))
-          throw new Error('An account with that email already exists');
-        const rec = { id: uid(), status: 'active', createdAt: now(), ...a, pass: hash(a.pass || 'changeme') };
-        list.push(rec); write(K.acc, list); return rec;
-      },
-      update(id, patch) {
-        const list = read(K.acc, []); const i = list.findIndex(a => a.id === id);
-        if (i < 0) return null; if (patch.pass) patch.pass = hash(patch.pass);
-        list[i] = { ...list[i], ...patch }; write(K.acc, list); return list[i];
-      },
-      remove(id) { write(K.acc, read(K.acc, []).filter(a => a.id !== id)); },
-      verifyPass(email, pass) { const a = store.accounts.byEmail(email); return a && a.pass === hash(pass) ? a : null; },
+  // ---- mappers (snake_case DB <-> camelCase app) ----
+  const toProp = (r) => ({ id: r.id, title: r.title, developer: r.developer, location: r.location,
+    summary: r.summary, priceFrom: r.price_from, stage: r.stage, status: r.status,
+    submittedBy: r.submitted_by_email, submittedByRole: r.submitted_by_role, createdAt: r.created_at, verifiedAt: r.verified_at,
+    milestones: Array.isArray(r.milestones) ? r.milestones : [], payments: Array.isArray(r.payments) ? r.payments : [] });
+  const toAcc = (r) => ({ id: r.id, name: r.name, email: r.email, role: r.role, status: r.status, createdAt: r.created_at });
+
+  // ================= SUPABASE MODE =================
+  async function fetchProfile(id) { const r = await sb('/rest/v1/profiles?id=eq.' + id + '&select=*'); return r && r[0] ? toAcc(r[0]) : null; }
+
+  const sbAuth = {
+    session: getSession,
+    profile: () => { const s = getSession(); return s && s.profile; },
+    async signUp({ name, email, password, role }) {
+      const d = await sb('/auth/v1/signup', { method: 'POST', anon: true, body: { email, password, data: { name, role } } });
+      if (d.access_token) await hydrate(d);
+      else if (d.user && !d.access_token) throw new Error('Check your email to confirm, then sign in.');
+      return d;
     },
+    async signIn({ email, password }) {
+      const d = await sb('/auth/v1/token?grant_type=password', { method: 'POST', anon: true, body: { email, password } });
+      return hydrate(d);
+    },
+    async signOut() { try { await sb('/auth/v1/logout', { method: 'POST' }); } catch {} setSession(null); },
+    async refreshProfile() { const s = getSession(); if (!s) return null; const p = await fetchProfile(s.user.id); if (p) { s.profile = p; setSession(s); } return p; },
+  };
+  async function hydrate(d) {
+    const user = d.user || {}; const sess = { access_token: d.access_token, refresh_token: d.refresh_token, user: { id: user.id, email: user.email } };
+    setSession(sess);
+    let p = null; for (let i = 0; i < 4 && !p; i++) { try { p = await fetchProfile(user.id); } catch {} if (!p) await new Promise(r => setTimeout(r, 450)); }
+    sess.profile = p; setSession(sess); return sess;
+  }
+
+  const sbDB = {
     properties: {
-      list: () => read(K.prop, []),
-      byId: (id) => read(K.prop, []).find(p => p.id === id),
-      listPublic: () => read(K.prop, []).filter(p => p.status === 'verified'),
-      listBy: (email) => read(K.prop, []).filter(p => (p.submittedBy || '').toLowerCase() === (email || '').toLowerCase()),
-      add(p) {
-        const list = read(K.prop, []);
-        const rec = { id: uid(), status: 'pending', createdAt: now(), ...p };
-        list.unshift(rec); write(K.prop, list); return rec;
-      },
-      update(id, patch) {
-        const list = read(K.prop, []); const i = list.findIndex(p => p.id === id);
-        if (i < 0) return null; list[i] = { ...list[i], ...patch }; write(K.prop, list); return list[i];
-      },
-      setStatus(id, status) {
-        const patch = { status }; if (status === 'verified') patch.verifiedAt = now();
-        return store.properties.update(id, patch);
-      },
-      remove(id) { write(K.prop, read(K.prop, []).filter(p => p.id !== id)); },
+      async listPublic() { return (await sb('/rest/v1/properties?status=eq.verified&order=created_at.desc&select=*', { anon: true })).map(toProp); },
+      async listMine() { const s = getSession(); if (!s) return []; return (await sb('/rest/v1/properties?submitted_by=eq.' + s.user.id + '&order=created_at.desc&select=*')).map(toProp); },
+      async listAll() { return (await sb('/rest/v1/properties?order=created_at.desc&select=*')).map(toProp); },
+      async byId(id) { const r = await sb('/rest/v1/properties?id=eq.' + id + '&select=*', { anon: true }); return r && r[0] ? toProp(r[0]) : null; },
+      async add(p) { const s = getSession();
+        const row = { title: p.title, developer: p.developer, location: p.location, summary: p.summary, price_from: p.priceFrom, stage: p.stage,
+          milestones: p.milestones || defaultMilestones(), payments: p.payments || [],
+          submitted_by: s.user.id, submitted_by_email: s.user.email, submitted_by_role: (s.profile && s.profile.role) || p.submittedByRole };
+        return sb('/rest/v1/properties', { method: 'POST', body: row, prefer: 'return=representation' }); },
+      async update(id, patch) { const row = {};
+        if ('title' in patch) row.title = patch.title; if ('developer' in patch) row.developer = patch.developer;
+        if ('location' in patch) row.location = patch.location; if ('summary' in patch) row.summary = patch.summary;
+        if ('priceFrom' in patch) row.price_from = patch.priceFrom; if ('stage' in patch) row.stage = patch.stage;
+        if ('status' in patch) row.status = patch.status; if ('verifiedAt' in patch) row.verified_at = patch.verifiedAt;
+        if ('milestones' in patch) row.milestones = patch.milestones; if ('payments' in patch) row.payments = patch.payments;
+        return sb('/rest/v1/properties?id=eq.' + id, { method: 'PATCH', body: row, prefer: 'return=representation' }); },
+      async setStatus(id, status) { return sbDB.properties.update(id, { status, verifiedAt: status === 'verified' ? nowISO() : null }); },
+      async remove(id) { return sb('/rest/v1/properties?id=eq.' + id, { method: 'DELETE' }); },
     },
-    session: {
-      get: () => read(K.sess, null),
-      set: (acc) => write(K.sess, acc ? { id: acc.id, name: acc.name, email: acc.email, role: acc.role } : null),
-      clear: () => localStorage.removeItem(K.sess),
+    profiles: {
+      async listAll() { return (await sb('/rest/v1/profiles?order=created_at.desc&select=*')).map(toAcc); },
+      async byId(id) { return fetchProfile(id); },
+      async add({ name, email, role, password }) {
+        // Admin creates a real account via signup (does not change the admin's own session).
+        return sb('/auth/v1/signup', { method: 'POST', anon: true, body: { email, password, data: { name, role } } });
+      },
+      async update(id, patch) { return sb('/rest/v1/profiles?id=eq.' + id, { method: 'PATCH', body: patch, prefer: 'return=representation' }); },
+      async remove(id) { return sb('/rest/v1/profiles?id=eq.' + id, { method: 'DELETE' }); },
     },
   };
+
+  // ================= LOCAL FALLBACK MODE (no keys) =================
+  const L = { acc: 'codev_accounts', prop: 'codev_properties', sess: 'codev_session', seed: 'codev_seeded_v1' };
+  const rd = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+  const wr = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const H = (s) => btoa(unescape(encodeURIComponent(s || '')));
+  function localSeed() {
+    if (rd(L.seed, false)) return;
+    wr(L.acc, [{ id: uid(), name: 'Platform Admin', email: 'admin@codevproperty.com', pass: H('admin2026'), role: 'admin', status: 'active', createdAt: nowISO() }]);
+    wr(L.prop, [{ id: uid(), title: 'Ivory Residences', developer: 'Meridian Developments', location: 'Ikoyi, Lagos', summary: '24 curated waterfront-adjacent residences.', priceFrom: 45000000, stage: 'Foundation', status: 'verified', submittedByRole: 'developer', submittedBy: 'dev@meridian.example', createdAt: nowISO() }]);
+    wr(L.seed, true);
+  }
+  const localAuth = {
+    session: () => rd(L.sess, null), profile: () => rd(L.sess, null),
+    async signUp({ name, email, password, role }) { const list = rd(L.acc, []);
+      if (list.some(a => a.email.toLowerCase() === email.toLowerCase())) throw new Error('Email already registered');
+      const a = { id: uid(), name, email, role, status: 'active', pass: H(password), createdAt: nowISO() }; list.push(a); wr(L.acc, list);
+      wr(L.sess, { id: a.id, name, email, role }); return a; },
+    async signIn({ email, password }) { const a = rd(L.acc, []).find(x => x.email.toLowerCase() === email.toLowerCase() && x.pass === H(password));
+      if (!a) throw new Error('Invalid email or password'); wr(L.sess, { id: a.id, name: a.name, email: a.email, role: a.role }); return a; },
+    async signOut() { localStorage.removeItem(L.sess); },
+    async refreshProfile() { return rd(L.sess, null); },
+  };
+  const localDB = {
+    properties: {
+      async listPublic() { return rd(L.prop, []).filter(p => p.status === 'verified'); },
+      async listMine() { const s = rd(L.sess, null); return s ? rd(L.prop, []).filter(p => (p.submittedBy || '').toLowerCase() === s.email.toLowerCase()) : []; },
+      async listAll() { return rd(L.prop, []); },
+      async byId(id) { return rd(L.prop, []).find(p => p.id === id); },
+      async add(p) { const s = rd(L.sess, null); const list = rd(L.prop, []); const rec = { id: uid(), status: 'pending', createdAt: nowISO(), submittedBy: s && s.email, submittedByRole: s && s.role, milestones: defaultMilestones(), payments: [], ...p }; list.unshift(rec); wr(L.prop, list); return rec; },
+      async update(id, patch) { const list = rd(L.prop, []); const i = list.findIndex(p => p.id === id); if (i < 0) return; list[i] = { ...list[i], ...patch }; wr(L.prop, list); return list[i]; },
+      async setStatus(id, status) { return localDB.properties.update(id, { status, verifiedAt: status === 'verified' ? nowISO() : undefined }); },
+      async remove(id) { wr(L.prop, rd(L.prop, []).filter(p => p.id !== id)); },
+    },
+    profiles: {
+      async listAll() { return rd(L.acc, []); },
+      async byId(id) { return rd(L.acc, []).find(a => a.id === id); },
+      async add({ name, email, role, password }) { const list = rd(L.acc, []); if (list.some(a => a.email.toLowerCase() === email.toLowerCase())) throw new Error('Email exists'); const a = { id: uid(), name, email, role, status: 'active', pass: H(password || 'changeme'), createdAt: nowISO() }; list.push(a); wr(L.acc, list); return a; },
+      async update(id, patch) { const list = rd(L.acc, []); const i = list.findIndex(a => a.id === id); if (i < 0) return; list[i] = { ...list[i], ...patch }; wr(L.acc, list); return list[i]; },
+      async remove(id) { wr(L.acc, rd(L.acc, []).filter(a => a.id !== id)); },
+    },
+  };
+
+  if (!configured) localSeed();
+  const auth = configured ? sbAuth : localAuth;
+  const db = configured ? sbDB : localDB;
 
   const fmtN = (n) => '₦' + (Number(n) || 0).toLocaleString();
   const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-  return { CFG, store, fmtN, esc, uid, now };
+  return { CFG, auth, db, fmtN, esc, now: nowISO };
 })();
