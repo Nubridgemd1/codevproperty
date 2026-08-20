@@ -38,61 +38,50 @@
       <option value="visitor">Property owner — list my property</option></select></div>
     <div class="field"><label>Password</label><input name="pass" type="password" minlength="6" required></div>
     <button class="btn primary" style="width:100%" id="suBtn">Create account</button>
-    <p class="tiny muted center" style="margin-top:12px">Sandbox mode — no real capital, KYC or escrow. ${CFG.configured ? 'Accounts are real &amp; shared across devices.' : 'Local demo mode.'}</p>
+    <p class="tiny muted center" style="margin-top:12px">Sandbox — no real capital/KYC/escrow. ${CFG.configured ? 'A 6-digit code is emailed to verify each sign-in (2FA).' : 'Local demo mode.'}</p>
     <p class="small muted center">Have an account? <a href="#" onclick="CODEVAPP.openAuth('signin');return false">Sign in</a></p></form>`; }
 
-  async function doSignin(e) { e.preventDefault(); const f = e.target; const btn = $('#siBtn'); btn.disabled = true; btn.textContent = 'Signing in…';
-    try { const sess = await auth.signIn({ email: f.email.value.trim(), password: f.pass.value });
-      const u = me();
-      if (u && u.status === 'suspended') { await auth.signOut(); toast('Account suspended — contact admin'); btn.disabled = false; btn.textContent = 'Sign in'; return false; }
-      if (u && u.role === 'admin') { toast('Admins use the Admin console'); location.href = 'admin.html'; return false; }
+  async function doSignin(e) { e.preventDefault(); const f = e.target; const email = f.email.value.trim(); const btn = $('#siBtn'); btn.disabled = true; btn.textContent = 'Checking…';
+    try {
       if (CFG.configured) {
-        if (!(sess.mfa && sess.mfa.enrolled)) { await startEnroll(); return false; }        // enforce 2FA enrolment
-        if (!auth.mfaOk()) { await startChallenge(sess.mfa.factorId); return false; }        // require 2FA code
+        await auth.passwordCheck({ email, password: f.pass.value });          // factor 1: password (no session yet)
+        btn.textContent = 'Emailing code…'; await startEmailCode(email); return false;   // factor 2: emailed code
       }
-      await afterAuth();
-    } catch (err) { toast(err.message || 'Sign in failed'); btn.disabled = false; btn.textContent = 'Sign in'; } return false; }
-  async function doSignup(e) { e.preventDefault(); const f = e.target; const btn = $('#suBtn'); btn.disabled = true; btn.textContent = 'Creating…';
-    try { await auth.signUp({ name: f.name.value.trim(), email: f.email.value.trim(), role: f.role.value, password: f.pass.value });
-      if (CFG.configured) { await startEnroll(); } else { toast('Welcome to CoDevelop!'); await afterAuth(); }   // 2FA required for every account
+      await auth.signIn({ email, password: f.pass.value }); await afterAuth();
+    } catch (err) { toast(err.message || 'Invalid email or password'); btn.disabled = false; btn.textContent = 'Sign in'; } return false; }
+  async function doSignup(e) { e.preventDefault(); const f = e.target; const email = f.email.value.trim(); const btn = $('#suBtn'); btn.disabled = true; btn.textContent = 'Creating…';
+    try {
+      if (CFG.configured) {
+        await auth.startSignup({ name: f.name.value.trim(), email, role: f.role.value, password: f.pass.value });
+        btn.textContent = 'Emailing code…'; await startEmailCode(email); return false;   // verify via emailed code
+      }
+      await auth.signUp({ name: f.name.value.trim(), email, role: f.role.value, password: f.pass.value }); toast('Welcome to CoDevelop!'); await afterAuth();
     } catch (err) { toast(err.message || 'Sign up failed'); btn.disabled = false; btn.textContent = 'Create account'; } return false; }
 
-  // ---- 2FA (required for all accounts) ----
-  async function startEnroll() {
-    try { const d = await auth.enrollTOTP(); const factorId = d.id; const t = d.totp || {}; const qr = t.qr_code || ''; const secret = t.secret || '';
-      const qrHtml = qr.indexOf('<svg') >= 0 ? `<div style="width:180px;margin:8px auto">${qr}</div>` : qr ? `<img src="${qr}" alt="2FA QR" width="180" height="180" style="display:block;margin:8px auto">` : '';
-      $('#authTitle').textContent = 'Set up two-factor authentication';
-      $('#authBody').innerHTML = `<p class="small muted">2FA is required for every account. Scan this with Google Authenticator, Authy or 1Password, then enter the 6-digit code.</p>
-        ${qrHtml}<p class="tiny muted center" style="margin-top:4px">Can't scan? Enter this key manually:<br><code style="user-select:all;font-size:12px">${esc(secret)}</code></p>
-        <form onsubmit="return CODEVAPP.confirmEnroll(event,'${factorId}')">
+  // ---- 2FA via emailed code (required for all public accounts) ----
+  async function startEmailCode(email) {
+    try { await auth.sendEmailCode(email);
+      $('#authTitle').textContent = 'Check your email';
+      $('#authBody').innerHTML = `<p class="small muted">We emailed a 6-digit verification code to <b>${esc(email)}</b>. Enter it to finish signing in.</p>
+        <form onsubmit="return CODEVAPP.confirmCode(event,'${esc(email)}')">
           <div class="field"><label>6-digit code</label><input name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" required autofocus></div>
-          <button class="btn primary" style="width:100%" id="enBtn">Verify &amp; enable 2FA</button></form>`;
+          <button class="btn primary" style="width:100%" id="ecBtn">Verify &amp; continue</button></form>
+        <p class="tiny muted center" style="margin-top:10px">Didn't get it? <a href="#" onclick="CODEVAPP.resendCode('${esc(email)}');return false">Resend code</a> · also check spam.</p>`;
       $('#authModal').classList.add('show');
-    } catch (err) { toast(err.message || 'Could not start 2FA setup'); }
+    } catch (err) { toast(err.message || 'Could not send code'); }
   }
-  async function confirmEnroll(e, factorId) { e.preventDefault(); const code = e.target.code.value.trim(); const btn = $('#enBtn'); btn.disabled = true; btn.textContent = 'Verifying…';
-    try { const ch = await auth.mfaChallenge(factorId); await auth.mfaVerify(factorId, ch.id, code); toast('Two-factor enabled'); await afterAuth(); }
-    catch (err) { toast(err.message || 'Invalid code — try again'); btn.disabled = false; btn.textContent = 'Verify & enable 2FA'; } return false; }
-  async function startChallenge(factorId) {
-    try { const ch = await auth.mfaChallenge(factorId);
-      $('#authTitle').textContent = 'Two-factor authentication';
-      $('#authBody').innerHTML = `<p class="small muted">Enter the 6-digit code from your authenticator app to finish signing in.</p>
-        <form onsubmit="return CODEVAPP.confirmChallenge(event,'${factorId}','${ch.id}')">
-          <div class="field"><label>6-digit code</label><input name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" required autofocus></div>
-          <button class="btn primary" style="width:100%" id="chBtn">Verify</button></form>`;
-      $('#authModal').classList.add('show');
-    } catch (err) { toast(err.message || 'Could not start 2FA'); }
+  async function confirmCode(e, email) { e.preventDefault(); const code = e.target.code.value.trim(); const btn = $('#ecBtn'); btn.disabled = true; btn.textContent = 'Verifying…';
+    try { await auth.verifyEmailCode({ email, code }); await afterAuth(); }
+    catch (err) { toast(err.message || 'Invalid or expired code'); btn.disabled = false; btn.textContent = 'Verify & continue'; } return false; }
+  async function resendCode(email) { try { await auth.sendEmailCode(email); toast('New code sent'); } catch (err) { toast(err.message || 'Could not resend'); } }
+  function mfaGate() { if (!CFG.configured || !me() || auth.mfaOk()) return false; startEmailCode(me().email); return true; }
+  async function afterAuth() {
+    const u = me();
+    if (u && u.status === 'suspended') { await auth.signOut(); renderAuthArea(); closeAuth(); toast('Account suspended — contact admin'); location.hash = '#/'; route(); return; }
+    if (u && u.role === 'admin') { closeAuth(); toast('Admins use the Admin console'); location.href = 'admin.html'; return; }
+    closeAuth(); renderAuthArea(); const then = CODEVAPP._afterAuth; CODEVAPP._afterAuth = null;
+    if (then) then(); else { location.hash = u.role === 'developer' ? '#/developer' : u.role === 'investor' ? '#/investor' : '#/account'; } route();
   }
-  async function confirmChallenge(e, factorId, challengeId) { e.preventDefault(); const code = e.target.code.value.trim(); const btn = $('#chBtn'); btn.disabled = true; btn.textContent = 'Verifying…';
-    try { await auth.mfaVerify(factorId, challengeId, code); await afterAuth(); }
-    catch (err) { toast(err.message || 'Invalid code — try again'); btn.disabled = false; btn.textContent = 'Verify'; } return false; }
-  function mfaGate() { // returns true if blocked (and shows modal)
-    if (!CFG.configured || !me() || auth.mfaOk()) return false;
-    const s = auth.session(); if (s && s.mfa && s.mfa.enrolled && s.mfa.factorId) startChallenge(s.mfa.factorId); else startEnroll();
-    return true;
-  }
-  async function afterAuth() { closeAuth(); renderAuthArea(); const then = CODEVAPP._afterAuth; CODEVAPP._afterAuth = null;
-    if (then) then(); else { const u = me(); location.hash = u.role === 'developer' ? '#/developer' : u.role === 'investor' ? '#/investor' : '#/account'; } route(); }
   async function logout() { await auth.signOut(); renderAuthArea(); toast('Logged out'); location.hash = '#/'; route(); }
   function requireLogin(then) { if (me()) return true; openAuth('signin', then); return false; }
 
@@ -202,7 +191,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, confirmEnroll, confirmChallenge, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, confirmCode, resendCode, _afterAuth: null };
   window.addEventListener('hashchange', route);
   document.addEventListener('DOMContentLoaded', () => { renderAuthArea(); route(); });
   renderAuthArea(); route();

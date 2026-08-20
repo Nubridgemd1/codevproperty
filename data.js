@@ -66,25 +66,18 @@ window.CODEV = (function () {
       else if (d.user && !d.access_token) throw new Error('Check your email to confirm, then sign in.');
       return d;
     },
-    async signIn({ email, password }) {
+    async signIn({ email, password }) { // password-only (used by the admin console)
       const d = await sb('/auth/v1/token?grant_type=password', { method: 'POST', anon: true, body: { email, password } });
-      const sess = await hydrate(d);
-      try { const facs = await sbAuth.listFactors(); const v = facs.filter(f => f.status === 'verified');
-        sess.mfa = { enrolled: v.length > 0, factorId: v[0] && v[0].id, aal: aalOf(sess.access_token) }; setSession(sess); } catch {}
-      return sess;
+      const sess = await hydrate(d); sess.mfa = { verified: true }; setSession(sess); return sess;
     },
+    // Public site = two-step: verify the password (no session persisted), then an emailed code.
+    async passwordCheck({ email, password }) { await sb('/auth/v1/token?grant_type=password', { method: 'POST', anon: true, body: { email, password } }); return true; },
+    async startSignup({ name, email, password, role }) { return sb('/auth/v1/signup', { method: 'POST', anon: true, body: { email, password, data: { name, role } } }); },
+    async sendEmailCode(email) { return sb('/auth/v1/otp', { method: 'POST', anon: true, body: { email, create_user: false } }); },
+    async verifyEmailCode({ email, code }) { const d = await sb('/auth/v1/verify', { method: 'POST', anon: true, body: { email, token: String(code), type: 'email' } }); const s = await hydrate(d); s.mfa = { method: 'email', verified: true }; setSession(s); return s; },
     async signOut() { try { await sb('/auth/v1/logout', { method: 'POST' }); } catch {} setSession(null); },
     async refreshProfile() { const s = getSession(); if (!s) return null; const p = await fetchProfile(s.user.id); if (p) { s.profile = p; setSession(s); } return p; },
-    // ---- MFA (TOTP) ----
-    async listFactors() { try { const r = await sb('/auth/v1/factors'); if (Array.isArray(r)) return r; if (r && r.totp) return r.totp; if (r && r.all) return r.all; return []; } catch { return []; } },
-    async enrollTOTP() { return sb('/auth/v1/factors', { method: 'POST', body: { factor_type: 'totp', friendly_name: 'CoDevelop-' + Date.now() } }); },
-    async mfaChallenge(factorId) { return sb('/auth/v1/factors/' + factorId + '/challenge', { method: 'POST' }); },
-    async mfaVerify(factorId, challengeId, code) {
-      const d = await sb('/auth/v1/factors/' + factorId + '/verify', { method: 'POST', body: { challenge_id: challengeId, code: String(code) } });
-      if (d.access_token) { const s = getSession(); if (s) { s.access_token = d.access_token; s.refresh_token = d.refresh_token || s.refresh_token; s.mfa = { enrolled: true, factorId, aal: 'aal2' }; setSession(s); } }
-      return d;
-    },
-    mfaOk() { const s = getSession(); return !!(s && s.mfa && s.mfa.aal === 'aal2'); },
+    mfaOk() { const s = getSession(); return !!(s && s.mfa && s.mfa.verified); },
   };
   function aalOf(tok) { try { const p = JSON.parse(atob(tok.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return p.aal || 'aal1'; } catch { return 'aal1'; } }
   async function hydrate(d) {
