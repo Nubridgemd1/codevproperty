@@ -116,27 +116,30 @@
       <p class="tiny" style="color:#9fb0c0;margin-top:12px">Illustrative schedule — each development sets its own certified milestones.</p></div>
   </div></section>`; }
   function ctaSection() { return `<section style="background:var(--soft);border-top:1px solid var(--line)"><div class="wrap center" style="padding:48px 22px">
-    <span class="eyebrow">Ready to explore?</span><h2 style="font-size:30px;margin:8px 0 8px">Qualify as a co-developer</h2>
-    <p class="muted" style="max-width:560px;margin:0 auto 20px">Enter the platform as an investor to co-develop, a developer to list and raise capital, or a property owner to list your property — verified and governed end-to-end.</p>
-    <div class="row" style="justify-content:center;gap:10px"><a class="btn primary" href="#/opportunities">Explore opportunities</a><a class="btn" href="#/list">List a property</a></div>
+    <span class="eyebrow">Ready to explore?</span><h2 style="font-size:32px;margin:8px 0 8px">Qualify as a co-developer</h2>
+    <p class="muted" style="max-width:560px;margin:0 auto 20px">Preview the full experience — enter the platform as an investor, developer, legal partner or administrator.</p>
+    <a class="btn primary" href="#/investor">Enter the platform ↗</a>
   </div></section>`; }
 
   // ---- views (return HTML strings; data passed in) ----
   const V = {
-    home(opps, counts) { return `<section class="hero"><div class="wrap grid g2" style="padding:56px 22px;align-items:center">
-      <div><span class="eyebrow">Nigeria · Ikoyi · VI · Lekki · Ikeja GRA</span>
-        <h1 style="font-size:40px;line-height:1.08;margin:10px 0 14px">Co-develop verified property — before the developer's margin.</h1>
-        <p class="muted" style="font-size:16px;max-width:46ch">List a property, get it verified, and co-develop with qualified capital on one governed platform. Every listing is reviewed and approved before it goes public.</p>
-        <div class="row" style="margin-top:22px"><a class="btn primary" href="#/opportunities">Explore opportunities</a><a class="btn" href="#/list">List a property</a></div>${flowStrip()}</div>
-      <div class="grid" style="gap:14px">
-        <div class="card pad"><div class="spread">
-          <div><div class="serif" style="font-size:26px;color:var(--navy)">${counts.opps}</div><div class="tiny muted">Verified opportunities</div></div>
-          <div><div class="serif" style="font-size:26px;color:var(--navy)">${counts.devs}</div><div class="tiny muted">Developers</div></div>
-          <div><div class="serif" style="font-size:26px;color:var(--navy)">${counts.investors}</div><div class="tiny muted">Investors</div></div></div></div>
-        <div class="card pad" style="background:var(--navy);color:#fff"><div class="eyebrow" style="color:var(--bronze2)">Trust before conversion</div>
-          <p style="margin:8px 0 0;font-size:14px;color:#dbe4ec">Listings from developers <b style="color:#fff">and</b> property owners are verified by our admin team before appearing here.</p></div></div></div></section>
-      <section class="wrap" style="padding:44px 22px"><div class="spread" style="margin-bottom:18px"><div><span class="eyebrow">Curated opportunities</span><h2 style="margin:4px 0 0;font-size:27px">Featured developments</h2></div><a class="btn sm" href="#/opportunities">View all →</a></div>
-        <div class="grid g3">${opps.slice(0, 3).map(oppCard).join('') || empty('No verified opportunities yet.')}</div></section>
+    home(opps, counts) { const devCount = new Set(opps.map(o => o.developer).filter(Boolean)).size; return `<section class="hero"><div class="wrap" style="padding:54px 22px;text-align:center">
+      <span class="eyebrow">🏛️ Nigeria MVP · Ikoyi · Victoria Island · Lekki · Ikeja GRA</span>
+      <h1 style="font-size:42px;line-height:1.06;margin:12px auto 14px;max-width:15ch">Co-develop premium property — <em style="font-style:italic;color:var(--bronze)">before</em> the developer's margin.</h1>
+      <p class="muted" style="font-size:16px;max-width:62ch;margin:0 auto 22px">Discover verified developments, qualify privately, structure through professional legal, fund on milestones and monitor construction to ownership — all in one governed digital journey.</p>
+      <div class="row" style="justify-content:center;gap:10px"><a class="btn primary" href="#/opportunities">Explore opportunities</a><a class="btn" href="#/how">How co-development works</a></div>
+      <div style="display:flex;justify-content:center">${flowStrip()}</div>
+      <div class="hero-stats">
+        <div><div class="n">4</div><div class="l">Prime Lagos markets</div></div>
+        <div><div class="n">${opps.length}</div><div class="l">Curated opportunities</div></div>
+        <div><div class="n">${devCount}</div><div class="l">Verified developers</div></div>
+        <div><div class="n">Milestone</div><div class="l">Escrow-governed funding</div></div>
+      </div></div></section>
+      <section class="wrap" style="padding:44px 22px"><div class="center" style="max-width:640px;margin:0 auto 22px">
+        <span class="eyebrow">Curated Opportunities</span><h2 style="margin:4px 0 6px;font-size:28px">Featured developments</h2>
+        <p class="muted" style="margin:0">Every opportunity is verified and approved before it reaches the marketplace — trust before conversion.</p></div>
+        <div class="grid g3">${opps.slice(0, 3).map(oppCard).join('') || empty('No verified opportunities yet.')}</div>
+        <div class="center" style="margin-top:24px"><a class="btn" href="#/opportunities">View all opportunities →</a></div></section>
       ${modelSection()}${trustSection()}${ctaSection()}`; },
     opportunities(opps) { return sec('All opportunities', 'Every listing here has been verified by our admin team.', `<div class="grid g3">${opps.map(oppCard).join('') || empty('No verified opportunities yet — check back soon.')}</div>`); },
     opp(p) { if (!p) return sec('Not available', '', empty('This development is not available.'));
