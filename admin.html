@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CoDevelop — Admin Console</title>
+<meta name="robots" content="noindex, nofollow" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
+<meta name="referrer" content="strict-origin-when-cross-origin" />
+<link rel="stylesheet" href="styles.css" />
+<style>
+  body{background:var(--soft)}
+  .adminbar{background:var(--navy);color:#fff}
+  .adminbar .logo{border-color:var(--bronze2);color:#fff}
+  .adminbar .brand b{color:#fff}
+  .tabs{display:flex;gap:4px;background:#fff;border:1px solid var(--line);border-radius:11px;padding:4px;width:max-content}
+  .tab{padding:8px 16px;border-radius:8px;font-weight:600;font-size:14px;color:var(--ink2);cursor:pointer;border:none;background:none}
+  .tab.active{background:var(--navy);color:#fff}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px}
+  .stat .n{font-family:'Fraunces',serif;font-size:26px;color:var(--navy)}
+  .stat .l{font-size:12px;color:var(--ink2);margin-top:2px}
+  .gate{max-width:400px;margin:8vh auto;padding:28px}
+</style>
+</head>
+<body>
+
+<div id="gate" class="gate card">
+  <div class="brand" style="justify-content:center;margin-bottom:14px"><span class="logo" style="border-color:var(--bronze)">C</span><span><b>CoDevelop</b><small>Admin Console</small></span></div>
+  <p class="small muted center">Enter the admin passcode to manage accounts and verify listings.</p>
+  <form onsubmit="return ADMIN.unlock(event)" style="margin-top:14px">
+    <div class="field"><label>Passcode</label><input id="pc" type="password" autofocus placeholder="admin passcode"></div>
+    <button class="btn primary" style="width:100%">Unlock console</button>
+    <p class="tiny muted center" style="margin-top:10px">Demo passcode: <b>admin2026</b> · client-side gate only (production uses real auth + MFA).</p>
+  </form>
+</div>
+
+<div id="console" class="hide">
+  <div class="adminbar"><div class="wrap spread" style="padding:14px 22px">
+    <div class="brand"><span class="logo">C</span><span><b>CoDevelop</b><small>Admin Console</small></span></div>
+    <div class="row" style="gap:8px"><a class="btn ghost sm" style="color:#cfdbe6" href="index.html" target="_blank">View site ↗</a>
+      <button class="btn sm" onclick="ADMIN.lock()">Lock</button></div>
+  </div></div>
+
+  <div class="wrap" style="padding:24px 22px">
+    <div class="grid g4" id="stats" style="margin-bottom:20px"></div>
+    <div class="tabs" style="margin-bottom:18px">
+      <button class="tab active" data-t="properties" onclick="ADMIN.tab('properties')">Properties</button>
+      <button class="tab" data-t="accounts" onclick="ADMIN.tab('accounts')">Accounts</button>
+    </div>
+    <div id="panel"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- edit modal -->
+<div class="modal-bg" id="modal"><div class="modal wide">
+  <div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div>
+  <div id="mBody"></div>
+</div></div>
+
+<script src="data.js"></script>
+<script>
+(function(){
+  const { CFG, store, fmtN, esc } = window.CODEV;
+  const $ = (s)=>document.querySelector(s);
+  let curTab = 'properties';
+  function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+
+  function unlock(e){e.preventDefault();
+    if($('#pc').value===CFG.ADMIN_PASSCODE){sessionStorage.setItem('codev_admin','1');show();}
+    else toast('Incorrect passcode');return false;}
+  function lock(){sessionStorage.removeItem('codev_admin');$('#console').classList.add('hide');$('#gate').classList.remove('hide');}
+  function show(){$('#gate').classList.add('hide');$('#console').classList.remove('hide');render();}
+
+  function render(){renderStats();tab(curTab);}
+  function renderStats(){
+    const A=store.accounts.list(),P=store.properties.list();
+    const st=[['Properties',P.length],['Pending review',P.filter(p=>p.status==='pending').length],
+      ['Accounts',A.length],['Verified live',P.filter(p=>p.status==='verified').length]];
+    $('#stats').innerHTML=st.map(s=>`<div class="stat"><div class="n">${s[1]}</div><div class="l">${s[0]}</div></div>`).join('');
+  }
+  function tab(t){curTab=t;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.t===t));
+    $('#panel').innerHTML = t==='accounts'?accountsPanel():propertiesPanel();}
+
+  // ---------- PROPERTIES ----------
+  function propertiesPanel(){
+    const P=store.properties.list();
+    const rows=P.map(p=>`<tr>
+      <td><b>${esc(p.title)}</b><div class="tiny muted">${esc(p.location)}</div></td>
+      <td>${esc(p.developer)}<div class="tiny muted">${esc(p.submittedBy)} · <span class="badge role">${p.submittedByRole||'—'}</span></div></td>
+      <td>${fmtN(p.priceFrom)}<div class="tiny muted">${esc(p.stage)}</div></td>
+      <td><span class="badge ${p.status}">${p.status}</span></td>
+      <td style="white-space:nowrap;text-align:right">
+        ${p.status!=='verified'?`<button class="btn sm" style="color:var(--green);border-color:#cfe6da" onclick="ADMIN.setStatus('${p.id}','verified')">✓ Verify</button>`:''}
+        ${p.status!=='rejected'?`<button class="btn sm danger" onclick="ADMIN.setStatus('${p.id}','rejected')">Reject</button>`:''}
+        <button class="btn sm" onclick="ADMIN.editProp('${p.id}')">Edit</button>
+        <button class="btn ghost sm" onclick="ADMIN.delProp('${p.id}')">🗑</button>
+      </td></tr>`).join('');
+    return `<div class="card"><div style="overflow-x:auto"><table><thead><tr>
+      <th>Property</th><th>Lister</th><th>From / Stage</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+      <tbody>${rows||`<tr><td colspan="5" class="center muted" style="padding:24px">No properties listed yet.</td></tr>`}</tbody></table></div></div>
+      <p class="tiny muted" style="margin-top:10px">Verify a listing to publish it on the public site. Listings come from developers and property owners (visitors) alike.</p>`;
+  }
+  function setStatus(id,s){store.properties.setStatus(id,s);toast('Listing '+(s==='verified'?'verified & published':s));render();}
+  function delProp(id){const p=store.properties.byId(id);if(confirm('Delete "'+p.title+'"? This cannot be undone.')){store.properties.remove(id);toast('Listing deleted');render();}}
+  function editProp(id){const p=store.properties.byId(id);$('#mTitle').textContent='Edit listing';
+    $('#mBody').innerHTML=`<form onsubmit="return ADMIN.saveProp(event,'${id}')">
+      <div class="field"><label>Title</label><input name="title" value="${esc(p.title)}" required></div>
+      <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Developer / owner</label><input name="developer" value="${esc(p.developer)}"></div>
+      <div class="field" style="flex:1"><label>Location</label><input name="location" value="${esc(p.location)}"></div></div>
+      <div class="field"><label>Summary</label><textarea name="summary" rows="3">${esc(p.summary)}</textarea></div>
+      <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Participation from (₦)</label><input name="priceFrom" type="number" value="${p.priceFrom}"></div>
+      <div class="field" style="flex:1"><label>Stage</label><select name="stage">${CFG.STAGES.map(x=>`<option ${x===p.stage?'selected':''}>${x}</option>`).join('')}</select></div></div>
+      <div class="field"><label>Status</label><select name="status">${['pending','verified','rejected'].map(x=>`<option ${x===p.status?'selected':''}>${x}</option>`).join('')}</select></div>
+      <button class="btn primary" style="width:100%">Save changes</button></form>`;
+    $('#modal').classList.add('show');}
+  function saveProp(e,id){e.preventDefault();const f=e.target;
+    store.properties.update(id,{title:f.title.value.trim(),developer:f.developer.value.trim(),location:f.location.value.trim(),
+      summary:f.summary.value.trim(),priceFrom:Number(f.priceFrom.value),stage:f.stage.value,status:f.status.value,
+      verifiedAt:f.status.value==='verified'?(store.properties.byId(id).verifiedAt||window.CODEV.now()):undefined});
+    closeModal();toast('Listing updated');render();return false;}
+
+  // ---------- ACCOUNTS ----------
+  function accountsPanel(){
+    const A=store.accounts.list();
+    const rows=A.map(a=>`<tr>
+      <td><b>${esc(a.name)}</b><div class="tiny muted">${esc(a.email)}</div></td>
+      <td>${a.role==='admin'?'<span class="badge role" style="background:#e9dfc7;color:#8a6113">admin</span>':`<select onchange="ADMIN.setRole('${a.id}',this.value)" style="padding:5px 8px;width:auto">${['investor','developer','visitor'].map(r=>`<option ${r===a.role?'selected':''}>${r}</option>`).join('')}</select>`}</td>
+      <td><span class="badge ${a.status==='active'?'verified':'pending'}">${a.status}</span></td>
+      <td class="tiny muted">${new Date(a.createdAt).toLocaleDateString()}</td>
+      <td style="white-space:nowrap;text-align:right">
+        ${a.role!=='admin'?`<button class="btn sm" onclick="ADMIN.toggleStatus('${a.id}')">${a.status==='active'?'Suspend':'Activate'}</button>
+        <button class="btn ghost sm" onclick="ADMIN.delAcc('${a.id}')">🗑</button>`:'<span class="tiny muted">protected</span>'}
+      </td></tr>`).join('');
+    return `<div class="spread" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px">Accounts</h3>
+      <button class="btn primary sm" onclick="ADMIN.addAcc()">+ Add account</button></div>
+      <div class="card"><div style="overflow-x:auto"><table><thead><tr>
+      <th>Name</th><th>Role</th><th>Status</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
+      <tbody>${rows}</tbody></table></div></div>`;
+  }
+  function addAcc(){$('#mTitle').textContent='Add account';
+    $('#mBody').innerHTML=`<form onsubmit="return ADMIN.saveAcc(event)">
+      <div class="field"><label>Full name / company</label><input name="name" required></div>
+      <div class="field"><label>Email</label><input name="email" type="email" required></div>
+      <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Role</label><select name="role">${['investor','developer','visitor','admin'].map(r=>`<option>${r}</option>`).join('')}</select></div>
+      <div class="field" style="flex:1"><label>Temp password</label><input name="pass" value="changeme" required></div></div>
+      <button class="btn primary" style="width:100%">Create account</button></form>`;
+    $('#modal').classList.add('show');}
+  function saveAcc(e){e.preventDefault();const f=e.target;
+    try{store.accounts.add({name:f.name.value.trim(),email:f.email.value.trim(),role:f.role.value,pass:f.pass.value});
+      closeModal();toast('Account created');render();}catch(err){toast(err.message);}return false;}
+  function setRole(id,role){store.accounts.update(id,{role});toast('Role updated');renderStats();}
+  function toggleStatus(id){const a=store.accounts.byId(id);store.accounts.update(id,{status:a.status==='active'?'suspended':'active'});toast('Account '+(a.status==='active'?'suspended':'activated'));render();}
+  function delAcc(id){const a=store.accounts.byId(id);if(confirm('Delete account "'+a.name+'" ('+a.email+')? This cannot be undone.')){store.accounts.remove(id);toast('Account deleted');render();}}
+
+  function closeModal(){$('#modal').classList.remove('show');}
+
+  window.ADMIN={unlock,lock,tab,setStatus,delProp,editProp,saveProp,addAcc,saveAcc,setRole,toggleStatus,delAcc,closeModal};
+  if(sessionStorage.getItem('codev_admin')==='1')show();
+})();
+</script>
+</body>
+</html>

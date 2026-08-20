@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CoDevelop — Property Co-Development Platform</title>
+<meta name="description" content="Co-develop verified property in Nigeria. Investors, developers and property owners — list, verify and co-develop on one governed platform." />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
+<meta name="referrer" content="strict-origin-when-cross-origin" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<header class="site-head">
+  <div class="wrap spread" style="padding-top:14px;padding-bottom:14px">
+    <a class="brand" href="#/">
+      <span class="logo">C</span>
+      <span><b>CoDevelop</b><small>Property Co-Development</small></span>
+    </a>
+    <nav class="topnav">
+      <a href="#/opportunities">Opportunities</a>
+      <a href="#/how">How it works</a>
+      <a href="#/list">List a property</a>
+    </nav>
+    <div class="row" style="gap:8px" id="authArea"></div>
+  </div>
+  <div class="access-strip">
+    <div class="wrap row" style="gap:16px;padding:7px 22px">
+      <span class="tiny muted" style="font-weight:600">Access:</span>
+      <a class="tiny" href="#/investor">Investor portal</a>
+      <a class="tiny" href="#/developer">Developer portal</a>
+      <a class="tiny" href="#/list">Property owner / visitor</a>
+      <a class="tiny" href="admin.html">Admin console ↗</a>
+    </div>
+  </div>
+</header>
+
+<main id="app"></main>
+
+<footer class="site-foot">
+  <div class="wrap grid g4" style="padding:34px 22px 20px">
+    <div>
+      <div class="brand" style="margin-bottom:8px"><span class="logo">C</span><span><b>CoDevelop</b><small>Property Co-Development</small></span></div>
+      <p class="small muted">A governed marketplace connecting qualified capital, verified developers and credible developments — from listing through verification to co-development.</p>
+    </div>
+    <div><h4 class="foot-h">Platform</h4>
+      <a class="foot-l" href="#/opportunities">Opportunities</a><a class="foot-l" href="#/how">How it works</a><a class="foot-l" href="#/list">List a property</a></div>
+    <div><h4 class="foot-h">Access</h4>
+      <a class="foot-l" href="#/investor">Investor</a><a class="foot-l" href="#/developer">Developer</a><a class="foot-l" href="#/list">Property owner</a><a class="foot-l" href="admin.html">Admin console ↗</a></div>
+    <div><h4 class="foot-h">Markets</h4>
+      <span class="foot-l muted">Ikoyi · Victoria Island</span><span class="foot-l muted">Lekki · Ikeja GRA</span><span class="foot-l muted">Nigeria</span></div>
+  </div>
+  <div class="wrap tiny muted" style="border-top:1px solid var(--line);padding:14px 22px">
+    © CoDevelop. Listings are verified before they appear publicly. This platform runs in secure sandbox mode — no real capital moves until licensed banking, escrow, KYC and legal partners are engaged.
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<!-- Auth modal -->
+<div class="modal-bg" id="authModal">
+  <div class="modal">
+    <div class="spread" style="margin-bottom:14px">
+      <h3 id="authTitle" style="margin:0">Sign in</h3>
+      <button class="btn ghost sm" onclick="CODEVAPP.closeAuth()">✕</button>
+    </div>
+    <div id="authBody"></div>
+  </div>
+</div>
+
+<style>
+.site-head{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50}
+.brand{display:flex;align-items:center;gap:10px}
+.brand .logo{width:34px;height:34px;border:1.5px solid var(--bronze);border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:700;color:var(--navy);font-size:18px}
+.brand b{font-family:'Fraunces',serif;color:var(--navy);font-size:17px;display:block;line-height:1}
+.brand small{font-size:9px;letter-spacing:1.5px;color:var(--bronze);text-transform:uppercase;font-weight:600}
+.topnav{display:flex;gap:22px}.topnav a{font-size:14px;font-weight:500;color:var(--ink2)}.topnav a:hover{color:var(--bronze)}
+.access-strip{background:var(--navy);}.access-strip a{color:#cfdbe6}.access-strip a:hover{color:#fff}
+@media(max-width:760px){.topnav{display:none}}
+.site-foot{background:#fff;border-top:1px solid var(--line);margin-top:50px}
+.foot-h{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink2);margin:0 0 10px}
+.foot-l{display:block;font-size:13.5px;color:var(--ink);margin-bottom:6px}.foot-l:hover{color:var(--bronze)}
+.hero{background:linear-gradient(160deg,#fff, var(--cream));border-bottom:1px solid var(--line)}
+.opp-card .ph{height:120px;background:linear-gradient(135deg,var(--navy),var(--navy2));border-radius:12px 12px 0 0;position:relative}
+.opp-card .ph .loc{position:absolute;left:12px;bottom:10px;color:#fff;font-size:12px;font-weight:600}
+.opp-card .ph .vb{position:absolute;right:10px;top:10px}
+.step-n{width:30px;height:30px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none}
+</style>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
