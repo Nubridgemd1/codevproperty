@@ -114,13 +114,16 @@
   async function delProp(id){ const p=PROPS.find(x=>x.id===id); if(confirm('Delete "'+p.title+'"?')){ try{ await db.properties.remove(id); toast('Listing deleted'); await load(); }catch(err){toast(err.message);} } }
 
   let EDIT=null;
-  function editProp(id){ const p=PROPS.find(x=>x.id===id); EDIT={ id, milestones:JSON.parse(JSON.stringify(p.milestones||[])), payments:JSON.parse(JSON.stringify(p.payments||[])) };
+  function editProp(id){ const p=PROPS.find(x=>x.id===id); EDIT={ id, milestones:JSON.parse(JSON.stringify(p.milestones||[])), payments:JSON.parse(JSON.stringify(p.payments||[])), images:JSON.parse(JSON.stringify(p.images||[])) };
     $('#mTitle').textContent='Edit: '+p.title;
     $('#mBody').innerHTML=`<form onsubmit="return ADMIN.saveProp(event,'${id}')">
       <div class="field"><label>Title</label><input name="title" value="${esc(p.title)}" required></div>
       <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Developer / owner</label><input name="developer" value="${esc(p.developer||'')}"></div>
         <div class="field" style="flex:1"><label>Location</label><input name="location" value="${esc(p.location||'')}"></div></div>
       <div class="field"><label>Summary</label><textarea name="summary" rows="2">${esc(p.summary||'')}</textarea></div>
+      <div class="field"><label>Photos <span class="tiny muted">— add or take a picture (up to 8); remove a photo to replace it. First photo is the cover.</span></label>
+        <label class="photo-drop"><input type="file" accept="image/*,.heic,.heif" multiple onchange="ADMIN.addPhotos(this)"><span class="pd-inner">📷 Add photos or take a picture</span></label>
+        <div id="imgRows" class="photo-grid"></div></div>
       <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Participation from (₦)</label><input name="priceFrom" type="number" value="${p.priceFrom||0}"></div>
         <div class="field" style="flex:1"><label>Stage</label><select name="stage">${CFG.STAGES.map(x=>`<option ${x===p.stage?'selected':''}>${x}</option>`).join('')}</select></div>
         <div class="field" style="flex:1"><label>Status</label><select name="status">${['pending','verified','rejected'].map(x=>`<option ${x===p.status?'selected':''}>${x}</option>`).join('')}</select></div></div>
@@ -132,8 +135,23 @@
       <div style="overflow-x:auto"><table><thead><tr><th>Label</th><th>Amount (₦)</th><th>Due date</th><th>Status</th><th></th></tr></thead><tbody id="payRows"></tbody></table></div>
 
       <button class="btn primary" style="width:100%;margin-top:14px">Save changes</button></form>`;
-    renderMs(); renderPay(); $('#modal').classList.add('show');
+    renderMs(); renderPay(); renderImgs(); $('#modal').classList.add('show');
   }
+  const MAX_IMGS=8;
+  function renderImgs(){ const box=$('#imgRows'); if(!box) return; box.innerHTML=EDIT.images.map((d,i)=>`<div class="ph-thumb"><img src="${d}" alt="photo ${i+1}"><button type="button" aria-label="Remove photo" onclick="ADMIN.delImg(${i})">✕</button></div>`).join(''); }
+  function delImg(i){ EDIT.images.splice(i,1); renderImgs(); }
+  function compressImg(file,maxDim,quality){ maxDim=maxDim||1500; quality=quality||0.72; return new Promise((resolve)=>{
+    const isImg=(file&&file.type&&file.type.indexOf('image/')===0)||/\.(jpe?g|png|webp|heic|heif)$/i.test((file&&file.name)||''); if(!isImg){resolve(null);return;}
+    const reader=new FileReader(); reader.onload=()=>{ const img=new Image();
+      img.onload=()=>{ try{ const w0=img.naturalWidth||img.width,h0=img.naturalHeight||img.height; const scale=Math.min(1,maxDim/Math.max(w0,h0));
+        const w=Math.max(1,Math.round(w0*scale)),h=Math.max(1,Math.round(h0*scale)); const c=document.createElement('canvas'); c.width=w;c.height=h;
+        const ctx=c.getContext('2d'); ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h); resolve(c.toDataURL('image/jpeg',quality)); }catch(e){resolve(null);} };
+      img.onerror=()=>resolve(null); img.src=reader.result; };
+    reader.onerror=()=>resolve(null); reader.readAsDataURL(file); }); }
+  async function addPhotos(input){ const files=Array.from(input.files||[]); input.value='';
+    const label=input.closest('.photo-drop')&&input.closest('.photo-drop').querySelector('.pd-inner'); const prev=label&&label.textContent; if(label)label.textContent='Processing…';
+    let skipped=0; for(const f of files){ if(EDIT.images.length>=MAX_IMGS){toast('Up to '+MAX_IMGS+' photos');break;} const d=await compressImg(f); if(d)EDIT.images.push(d); else skipped++; }
+    if(label&&prev)label.textContent=prev; if(skipped)toast('Skipped '+skipped+" file(s) that couldn't be read"); renderImgs(); }
   function renderMs(){ $('#msRows').innerHTML=EDIT.milestones.map((m,i)=>`<tr class="subrow">
     <td><input value="${esc(m.name||'')}" onchange="ADMIN.msSet(${i},'name',this.value)"></td>
     <td style="width:70px"><input type="number" value="${m.pct||0}" onchange="ADMIN.msSet(${i},'pct',Number(this.value))"></td>
@@ -150,7 +168,7 @@
   function paySet(i,k,v){ EDIT.payments[i][k]=v; } function delPay(i){ EDIT.payments.splice(i,1); renderPay(); } function addPay(){ EDIT.payments.push({label:'',amount:0,dueDate:'',status:'due'}); renderPay(); }
   async function saveProp(e,id){ e.preventDefault(); const f=e.target;
     try{ await db.properties.update(id,{ title:f.title.value.trim(), developer:f.developer.value.trim(), location:f.location.value.trim(), summary:f.summary.value.trim(),
-      priceFrom:Number(f.priceFrom.value), stage:f.stage.value, status:f.status.value, milestones:EDIT.milestones, payments:EDIT.payments,
+      priceFrom:Number(f.priceFrom.value), stage:f.stage.value, status:f.status.value, milestones:EDIT.milestones, payments:EDIT.payments, images:EDIT.images,
       verifiedAt:f.status.value==='verified'?window.CODEV.now():null });
       closeModal(); toast('Listing, milestones & payments updated'); await load();
     }catch(err){ toast(err.message||'Save failed'); } return false; }
@@ -187,7 +205,7 @@
   async function delAcc(id){ const a=ACCS.find(x=>x.id===id); if(confirm('Delete account "'+(a.name||a.email)+'"?')){ try{ await db.profiles.remove(id); toast('Account deleted'); await load(); }catch(err){toast(err.message);} } }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,addMs,delMs,msSet,addPay,delPay,paySet,addAcc,saveAcc,setRole,toggleStatus,delAcc,closeModal};
+  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,addAcc,saveAcc,setRole,toggleStatus,delAcc,closeModal};
 
   renderGate();
   // auto-resume
