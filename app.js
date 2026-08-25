@@ -111,8 +111,9 @@
   function requireLogin(then) { if (me()) return true; openAuth('signin', then); return false; }
 
   // ---- pieces ----
+  function coverBg(p) { return (p.images && p.images[0]) ? `background-image:url('${p.images[0]}');background-size:cover;background-position:center;` : ''; }
   function oppCard(p) { return `<div class="card opp-card">
-    <div class="ph"><span class="vb badge verified">✓ Verified</span><span class="loc">📍 ${esc(p.location)}</span></div>
+    <div class="ph" style="${coverBg(p)}"><span class="vb badge verified">✓ Verified</span><span class="loc">📍 ${esc(p.location)}</span></div>
     <div style="padding:16px"><div class="small muted" style="font-weight:600">${esc(p.developer)}</div>
       <h3 style="margin:2px 0 6px;font-size:19px">${esc(p.title)}</h3>
       <p class="small muted" style="min-height:38px">${esc(p.summary)}</p>
@@ -171,7 +172,8 @@
       const ms = p.milestones || []; const pays = p.payments || [];
       return `<section class="wrap" style="padding:36px 22px"><a class="small muted" href="#/opportunities">← All opportunities</a>
         <div class="grid g2" style="margin-top:14px;align-items:start">
-          <div class="card" style="overflow:hidden"><div class="ph" style="height:240px"></div>
+          <div class="card" style="overflow:hidden"><div class="ph" style="height:240px;${coverBg(p)}"></div>
+            ${p.images && p.images.length > 1 ? `<div class="photo-grid" style="padding:10px 10px 0">${p.images.slice(0, 6).map(d => `<div class="ph-thumb"><img src="${d}" alt=""></div>`).join('')}</div>` : ''}
             <div style="padding:18px"><h3 style="margin:0 0 10px;font-size:17px">Milestone schedule &amp; timeline</h3>
               ${fundingBar(p)}
               <table style="margin-top:10px;font-size:13px"><thead><tr><th>Milestone</th><th>%</th><th>Target</th><th>Status</th></tr></thead><tbody>
@@ -186,13 +188,17 @@
             <button class="btn primary" style="margin-top:16px" onclick="CODEVAPP.express('${p.id}')">Express interest</button></div></div></section>`; },
     how() { const steps = [['List', 'A developer or property owner submits a development or plot.'], ['Verify', 'Admin reviews and verifies the listing before it goes public.'], ['Co-develop', 'Investors browse verified opportunities and express interest.'], ['Govern', 'Milestone-based structure with timelines & payments (sandbox — real escrow with partners).']];
       return sec('How it works', 'From listing to verification to co-development.', `<div class="grid g2">${steps.map((s, i) => `<div class="card pad row" style="gap:14px;align-items:flex-start"><span class="step-n">${i + 1}</span><div><h3 style="margin:0 0 4px;font-size:18px">${s[0]}</h3><p class="small muted" style="margin:0">${s[1]}</p></div></div>`).join('')}</div>`); },
-    list(u, mine) { return sec('List a property', 'Developers and property owners can list here. Submissions are verified by admin before they go public.',
+    list(u, mine) { listingPhotos = [];
+      return sec('List a property', 'Developers and property owners can list here. Submissions are verified by admin before they go public.',
       `<div class="grid g2" style="align-items:start">
         <form class="card pad" onsubmit="return CODEVAPP.submitProperty(event)">
           <div class="field"><label>Property / development title</label><input name="title" required></div>
           <div class="field"><label>Developer / owner name</label><input name="developer" value="${esc(u.name)}" required></div>
           <div class="field"><label>Location</label><input name="location" placeholder="e.g. Lekki, Lagos" required></div>
           <div class="field"><label>Summary</label><textarea name="summary" rows="3" required></textarea></div>
+          <div class="field"><label>Photos <span class="tiny muted">— up to ${MAX_PHOTOS}, from your phone or computer</span></label>
+            <label class="photo-drop"><input type="file" accept="image/*,.heic,.heif" multiple onchange="CODEVAPP.addPhotos(this)"><span class="pd-inner">📷 Tap to add photos or take a picture</span></label>
+            <div id="photoPreviews" class="photo-grid"></div></div>
           <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Participation from (₦)</label><input name="priceFrom" type="number" min="0" required></div>
             <div class="field" style="flex:1"><label>Stage</label><select name="stage">${CFG.STAGES.map(x => `<option>${x}</option>`).join('')}</select></div></div>
           <button class="btn primary" style="width:100%">Submit for verification</button>
@@ -206,17 +212,62 @@
       <div><div class="spread"><h3 style="font-size:17px">Your listings</h3><a class="btn sm" href="#/list">+ List</a></div><div id="mySubs">${listCards(mine)}</div></div></div>`); },
   };
   function listCards(mine) { if (!mine || !mine.length) return `<div class="card pad small muted">No submissions yet. <a href="#/list">List a property →</a></div>`;
-    return `<div class="grid" style="gap:10px">${mine.map(p => `<div class="card pad spread"><div><b>${esc(p.title)}</b><div class="tiny muted">${esc(p.location)} · ${fmtN(p.priceFrom)} · funded ${funded(p)}%</div></div><span class="badge ${p.status}">${p.status}</span></div>`).join('')}</div>`; }
+    return `<div class="grid" style="gap:10px">${mine.map(p => `<div class="card pad spread"><div class="row" style="gap:11px;align-items:center">${p.images && p.images[0] ? `<img src="${p.images[0]}" alt="" style="width:48px;height:48px;border-radius:9px;object-fit:cover;flex:none">` : ''}<div><b>${esc(p.title)}</b><div class="tiny muted">${esc(p.location)} · ${fmtN(p.priceFrom)} · funded ${funded(p)}%</div></div></div><span class="badge ${p.status}">${p.status}</span></div>`).join('')}</div>`; }
   function portalHead(t, u) { return `<section class="hero"><div class="wrap" style="padding:26px 22px"><span class="eyebrow">${u.role} · ${esc(u.email)}</span><h1 style="font-size:28px;margin:6px 0 0">${t}</h1></div></section>`; }
   function sec(t, sub, body) { return `<section class="wrap" style="padding:${t ? '40' : '24'}px 22px">${t ? `<span class="eyebrow">CoDevelop</span><h2 style="margin:4px 0 ${sub ? '4' : '18'}px;font-size:27px">${t}</h2>` : ''}${sub ? `<p class="muted" style="margin:0 0 22px;max-width:60ch">${sub}</p>` : ''}${body}</section>`; }
   const empty = (m) => `<div class="card pad center muted" style="grid-column:1/-1">${m}</div>`;
   const loading = () => `<section class="wrap" style="padding:60px 22px"><div class="card pad center muted">Loading…</div></section>`;
 
   // ---- actions ----
+  // ---- listing photos: mobile-friendly capture, HEIC-safe, compressed to data URLs ----
+  const MAX_PHOTOS = 6;
+  let listingPhotos = [];
+  // Downscale + re-encode to JPEG (handles iPhone HEIC via the browser decoder). Returns a data URL or null.
+  function compressImg(file, maxDim, quality) {
+    maxDim = maxDim || 1500; quality = quality || 0.72;
+    return new Promise((resolve) => {
+      const isImg = (file && file.type && file.type.indexOf('image/') === 0) || /\.(jpe?g|png|webp|heic|heif)$/i.test((file && file.name) || '');
+      if (!isImg) { resolve(null); return; }
+      const url = URL.createObjectURL(file); const img = new Image();
+      img.onload = () => { try {
+          const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
+          const scale = Math.min(1, maxDim / Math.max(w0, h0));
+          const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
+          const c = document.createElement('canvas'); c.width = w; c.height = h;
+          const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+          resolve(c.toDataURL('image/jpeg', quality));
+        } catch (e) { resolve(null); } finally { URL.revokeObjectURL(url); } };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    });
+  }
+  async function addPhotos(input) {
+    const files = Array.from(input.files || []); input.value = '';
+    const drop = input.closest('.photo-drop'); const label = drop && drop.querySelector('.pd-inner'); const prev = label && label.textContent;
+    if (label) label.textContent = 'Processing…';
+    let skipped = 0;
+    for (const f of files) {
+      if (listingPhotos.length >= MAX_PHOTOS) { toast('Up to ' + MAX_PHOTOS + ' photos'); break; }
+      const d = await compressImg(f); if (d) listingPhotos.push(d); else skipped++;
+    }
+    if (label && prev) label.textContent = prev;
+    if (skipped) toast('Skipped ' + skipped + ' file' + (skipped > 1 ? 's' : '') + " that couldn't be read");
+    renderPhotoPreviews();
+  }
+  function removePhoto(i) { listingPhotos.splice(i, 1); renderPhotoPreviews(); }
+  function renderPhotoPreviews() { const box = document.getElementById('photoPreviews'); if (!box) return;
+    box.innerHTML = listingPhotos.map((d, i) => `<div class="ph-thumb"><img src="${d}" alt="photo ${i + 1}"><button type="button" aria-label="Remove photo" onclick="CODEVAPP.removePhoto(${i})">✕</button></div>`).join(''); }
+
   async function submitProperty(e) { e.preventDefault(); const f = e.target; const u = me();
-    try { await db.properties.add({ title: f.title.value.trim(), developer: f.developer.value.trim(), location: f.location.value.trim(), summary: f.summary.value.trim(), priceFrom: Number(f.priceFrom.value), stage: f.stage.value });
-      toast('Submitted! Admin will verify it before it goes public.'); const mine = await db.properties.listMine(); const box = document.getElementById('mySubs'); if (box) box.innerHTML = listCards(mine); f.reset(); f.developer.value = u.name;
-    } catch (err) { toast(err.message || 'Could not submit'); } return false; }
+    const btn = f.querySelector('button[type=submit],button:not([type])'); if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+    try { await db.properties.add({ title: f.title.value.trim(), developer: f.developer.value.trim(), location: f.location.value.trim(), summary: f.summary.value.trim(), priceFrom: Number(f.priceFrom.value), stage: f.stage.value, images: listingPhotos.slice() });
+      if (CFG.imagesUnavailable) toast('Listing submitted. (Photos need a quick backend setup before they save — see admin.)');
+      else toast('Submitted! Admin will verify it before it goes public.');
+      listingPhotos = []; renderPhotoPreviews();
+      const mine = await db.properties.listMine(); const box = document.getElementById('mySubs'); if (box) box.innerHTML = listCards(mine);
+      f.reset(); f.developer.value = u.name;
+    } catch (err) { toast(err.message || 'Could not submit'); }
+    finally { if (btn) { btn.disabled = false; btn.textContent = 'Submit for verification'; } } return false; }
   function express(id) { if (!requireLogin(() => express(id))) return; toast('Interest registered — the team will be in touch (sandbox).'); }
 
   // ---- router (async) ----
@@ -241,7 +292,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, confirmCode, resendCode, togglePass, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, confirmCode, resendCode, togglePass, addPhotos, removePhoto, _afterAuth: null };
   window.addEventListener('hashchange', route);
   document.addEventListener('DOMContentLoaded', () => { renderAuthArea(); route(); });
   renderAuthArea(); route();

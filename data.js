@@ -51,7 +51,8 @@ window.CODEV = (function () {
   const toProp = (r) => ({ id: r.id, title: r.title, developer: r.developer, location: r.location,
     summary: r.summary, priceFrom: r.price_from, stage: r.stage, status: r.status,
     submittedBy: r.submitted_by_email, submittedByRole: r.submitted_by_role, createdAt: r.created_at, verifiedAt: r.verified_at,
-    milestones: Array.isArray(r.milestones) ? r.milestones : [], payments: Array.isArray(r.payments) ? r.payments : [] });
+    milestones: Array.isArray(r.milestones) ? r.milestones : [], payments: Array.isArray(r.payments) ? r.payments : [],
+    images: Array.isArray(r.images) ? r.images : [] });
   const toAcc = (r) => ({ id: r.id, name: r.name, email: r.email, role: r.role, status: r.status, createdAt: r.created_at });
 
   // ================= SUPABASE MODE =================
@@ -101,13 +102,18 @@ window.CODEV = (function () {
         const row = { title: p.title, developer: p.developer, location: p.location, summary: p.summary, price_from: p.priceFrom, stage: p.stage,
           milestones: p.milestones || defaultMilestones(), payments: p.payments || [],
           submitted_by: s.user.id, submitted_by_email: s.user.email, submitted_by_role: (s.profile && s.profile.role) || p.submittedByRole };
-        return sb('/rest/v1/properties', { method: 'POST', body: row, prefer: 'return=representation' }); },
+        const withImages = Object.assign({}, row, { images: p.images || [] });
+        try { return await sb('/rest/v1/properties', { method: 'POST', body: withImages, prefer: 'return=representation' }); }
+        catch (e) { // If the DB has no `images` column yet, still save the listing (photos dropped) and flag it.
+          if (/images/i.test((e && e.message) || '')) { CFG.imagesUnavailable = true; return sb('/rest/v1/properties', { method: 'POST', body: row, prefer: 'return=representation' }); }
+          throw e; } },
       async update(id, patch) { const row = {};
         if ('title' in patch) row.title = patch.title; if ('developer' in patch) row.developer = patch.developer;
         if ('location' in patch) row.location = patch.location; if ('summary' in patch) row.summary = patch.summary;
         if ('priceFrom' in patch) row.price_from = patch.priceFrom; if ('stage' in patch) row.stage = patch.stage;
         if ('status' in patch) row.status = patch.status; if ('verifiedAt' in patch) row.verified_at = patch.verifiedAt;
         if ('milestones' in patch) row.milestones = patch.milestones; if ('payments' in patch) row.payments = patch.payments;
+        if ('images' in patch) row.images = patch.images;
         return sb('/rest/v1/properties?id=eq.' + id, { method: 'PATCH', body: row, prefer: 'return=representation' }); },
       async setStatus(id, status) { return sbDB.properties.update(id, { status, verifiedAt: status === 'verified' ? nowISO() : null }); },
       async remove(id) { return sb('/rest/v1/properties?id=eq.' + id, { method: 'DELETE' }); },
