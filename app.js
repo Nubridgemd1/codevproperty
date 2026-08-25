@@ -228,17 +228,22 @@
     return new Promise((resolve) => {
       const isImg = (file && file.type && file.type.indexOf('image/') === 0) || /\.(jpe?g|png|webp|heic|heif)$/i.test((file && file.name) || '');
       if (!isImg) { resolve(null); return; }
-      const url = URL.createObjectURL(file); const img = new Image();
-      img.onload = () => { try {
-          const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
-          const scale = Math.min(1, maxDim / Math.max(w0, h0));
-          const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
-          const c = document.createElement('canvas'); c.width = w; c.height = h;
-          const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
-          resolve(c.toDataURL('image/jpeg', quality));
-        } catch (e) { resolve(null); } finally { URL.revokeObjectURL(url); } };
-      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
-      img.src = url;
+      // Decode via a data: URL (not a blob: URL) so the site's CSP img-src allows it.
+      const reader = new FileReader();
+      reader.onload = () => { const img = new Image();
+        img.onload = () => { try {
+            const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
+            const scale = Math.min(1, maxDim / Math.max(w0, h0));
+            const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
+            const c = document.createElement('canvas'); c.width = w; c.height = h;
+            const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+            resolve(c.toDataURL('image/jpeg', quality));
+          } catch (e) { resolve(null); } };
+        img.onerror = () => resolve(null);
+        img.src = reader.result;
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
     });
   }
   async function addPhotos(input) {
