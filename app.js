@@ -96,7 +96,7 @@
     return true;
   }
   async function confirmCode(e, email) { e.preventDefault(); const code = e.target.code.value.trim(); const btn = $('#ecBtn'); btn.disabled = true; btn.textContent = 'Verifying…';
-    try { await auth.verifyEmailCode({ email, code }); await afterAuth(); }
+    try { await auth.verifyEmailCode({ email, code }); try { await auth.welcome(); } catch {} await afterAuth(); }
     catch (err) { toast(err.message || 'Invalid or expired code'); btn.disabled = false; btn.textContent = 'Verify & continue'; } return false; }
   async function resendCode(email) { try { await auth.sendEmailCode(email); toast('New code sent'); } catch (err) { toast(mailErr(err)); } }
   function mfaGate() { if (!CFG.configured || !me() || auth.mfaOk()) return false; startEmailCode(me().email); return true; }

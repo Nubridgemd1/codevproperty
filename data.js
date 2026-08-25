@@ -80,6 +80,8 @@ window.CODEV = (function () {
     // the session rather than stranding the client. Normal email 2FA resumes once mail is restored.
     async completeSignup(d) { if (!d || !d.access_token) return null; const s = await hydrate(d); s.mfa = { method: 'signup', verified: true }; setSession(s); return s; },
     async verifyEmailCode({ email, code }) { const d = await sb('/auth/v1/verify', { method: 'POST', anon: true, body: { email, token: String(code), type: 'email' } }); const s = await hydrate(d); s.mfa = { method: 'email', verified: true }; setSession(s); return s; },
+    // Send the role-based welcome email once, after the user completes 2FA (idempotent server-side).
+    async welcome() { try { await sb('/rest/v1/rpc/send_welcome_if_needed', { method: 'POST', body: {} }); } catch {} },
     async signOut() { try { await sb('/auth/v1/logout', { method: 'POST' }); } catch {} setSession(null); },
     async refreshProfile() { const s = getSession(); if (!s) return null; const p = await fetchProfile(s.user.id); if (p) { s.profile = p; setSession(s); } return p; },
     mfaOk() { const s = getSession(); return !!(s && s.mfa && s.mfa.verified); },
@@ -152,7 +154,7 @@ window.CODEV = (function () {
       if (!a) throw new Error('Invalid email or password'); wr(L.sess, { id: a.id, name: a.name, email: a.email, role: a.role }); return a; },
     async signOut() { localStorage.removeItem(L.sess); },
     async refreshProfile() { return rd(L.sess, null); },
-    mfaOk() { return true; }, async listFactors() { return []; },
+    mfaOk() { return true; }, async listFactors() { return []; }, async welcome() {},
   };
   const localDB = {
     properties: {
