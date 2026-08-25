@@ -59,9 +59,33 @@
           <div class="field"><label>Password</label><input id="aPass" type="password" required></div>`
           :`<div class="field"><label>Passcode</label><input id="aPass" type="password" required autofocus></div>`}
         <button class="btn primary" style="width:100%" id="loginBtn">Unlock console</button>
-        <p class="tiny muted center" style="margin-top:10px">${CFG.configured?'Real authentication via Supabase. Only accounts with the admin role may enter.':'Demo passcode: <b>admin2026</b>'}</p>
+        ${CFG.configured?`<p class="tiny muted center" style="margin-top:8px"><a href="#" onclick="ADMIN.forgot();return false">Forgot password?</a></p>`:''}
+        <p class="tiny muted center" style="margin-top:6px">${CFG.configured?'Real authentication via Supabase. Only accounts with the admin role may enter.':'Demo passcode: <b>admin2026</b>'}</p>
       </form>`;
   }
+  const gateHead = `<div class="brand" style="justify-content:center;margin-bottom:14px"><span class="logo" style="border-color:var(--bronze)">C</span><span><b>CoDevelop</b><small>Admin Console</small></span></div>`;
+  function backToLogin(){ renderGate(); }
+  function forgot(){ $('#gate').innerHTML = gateHead + `<form onsubmit="return ADMIN.forgotSend(event)" style="margin-top:8px">
+      <p class="small muted center" style="margin:0 0 10px">Enter your admin email to get a 6-digit reset code.</p>
+      <div class="field"><label>Admin email</label><input id="fEmail" type="email" required autofocus></div>
+      <button class="btn primary" style="width:100%" id="fBtn">Send reset code</button>
+      <p class="tiny muted center" style="margin-top:10px"><a href="#" onclick="ADMIN.backToLogin();return false">Back to sign in</a></p></form>`; }
+  async function forgotSend(e){ e.preventDefault(); const email=$('#fEmail').value.trim(); const btn=$('#fBtn'); btn.disabled=true; btn.textContent='Sending…';
+    try{ await auth.sendRecovery(email);
+      $('#gate').innerHTML = gateHead + `<form onsubmit="return ADMIN.forgotReset(event,'${esc(email)}')" style="margin-top:8px">
+        <p class="small muted center" style="margin:0 0 10px">Enter the code sent to <b>${esc(email)}</b> and choose a new password.</p>
+        <div class="field"><label>6-digit code</label><input id="rCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" required autofocus></div>
+        <div class="field"><label>New password</label><div style="position:relative"><input id="rPass" type="password" minlength="6" required style="width:100%;padding-right:42px"><button type="button" tabindex="-1" onclick="var i=this.previousElementSibling;i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁':'🙈'" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;opacity:.7">👁</button></div></div>
+        <button class="btn primary" style="width:100%" id="rBtn">Update password &amp; enter</button>
+        <p class="tiny muted center" style="margin-top:10px"><a href="#" onclick="ADMIN.backToLogin();return false">Back to sign in</a></p></form>`;
+    }catch(err){ toast(err.message||'Could not send code'); btn.disabled=false; btn.textContent='Send reset code'; }
+    return false; }
+  async function forgotReset(e,email){ e.preventDefault(); const code=$('#rCode').value.trim(); const password=$('#rPass').value; const btn=$('#rBtn'); btn.disabled=true; btn.textContent='Updating…';
+    try{ await auth.resetPassword({email, code, password}); await auth.refreshProfile(); const p=auth.profile();
+      if(!p || p.role!=='admin'){ await auth.signOut(); toast('That account is not an admin'); renderGate(); return false; }
+      toast('Password updated'); await show();
+    }catch(err){ toast(err.message||'Invalid or expired code'); btn.disabled=false; btn.textContent='Update password & enter'; }
+    return false; }
   async function login(e){e.preventDefault(); const btn=$('#loginBtn'); btn.disabled=true; btn.textContent='Checking…';
     try{
       if(CFG.configured){
@@ -205,7 +229,7 @@
   async function delAcc(id){ const a=ACCS.find(x=>x.id===id); if(confirm('Delete account "'+(a.name||a.email)+'"?')){ try{ await db.profiles.remove(id); toast('Account deleted'); await load(); }catch(err){toast(err.message);} } }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,addAcc,saveAcc,setRole,toggleStatus,delAcc,closeModal};
+  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,addAcc,saveAcc,setRole,toggleStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset};
 
   renderGate();
   // auto-resume

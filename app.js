@@ -36,6 +36,7 @@
   function signinForm() { return `<form onsubmit="return CODEVAPP.doSignin(event)">
     <div class="field"><label>Email</label><input name="email" type="email" required></div>
     ${passField('Password', 'pass', 'required')}
+    <div style="text-align:right;margin:2px 0 10px"><a href="#" class="tiny muted" onclick="CODEVAPP.forgotFromSignin();return false">Forgot password?</a></div>
     <button class="btn primary" style="width:100%" id="siBtn">Sign in</button>
     <p class="small muted center" style="margin-top:12px">New here? <a href="#" onclick="CODEVAPP.openAuth('signup');return false">Create an account</a></p></form>`; }
   function signupForm() { return `<form onsubmit="return CODEVAPP.doSignup(event)">
@@ -99,6 +100,35 @@
     try { await auth.verifyEmailCode({ email, code }); try { await auth.welcome(); } catch {} await afterAuth(); }
     catch (err) { toast(err.message || 'Invalid or expired code'); btn.disabled = false; btn.textContent = 'Verify & continue'; } return false; }
   async function resendCode(email) { try { await auth.sendEmailCode(email); toast('New code sent'); } catch (err) { toast(mailErr(err)); } }
+
+  // ---- forgot / reset password (emailed 6-digit code) ----
+  function forgotFromSignin() { const el = document.querySelector('#authBody input[name=email]'); forgotStart(el ? el.value.trim() : ''); }
+  function forgotStart(prefill) {
+    $('#authTitle').textContent = 'Reset your password';
+    $('#authBody').innerHTML = `<form onsubmit="return CODEVAPP.doForgot(event)">
+      <p class="small muted" style="margin:0 0 10px">Enter your account email and we'll send a 6-digit reset code.</p>
+      <div class="field"><label>Email</label><input name="email" type="email" required value="${prefill ? esc(prefill) : ''}" autofocus></div>
+      <button class="btn primary" style="width:100%" id="fpBtn">Send reset code</button>
+      <p class="small muted center" style="margin-top:12px"><a href="#" onclick="CODEVAPP.openAuth('signin');return false">Back to sign in</a></p></form>`;
+    $('#authModal').classList.add('show');
+  }
+  async function doForgot(e) { e.preventDefault(); const email = e.target.email.value.trim(); const btn = $('#fpBtn'); btn.disabled = true; btn.textContent = 'Sending…';
+    try {
+      await auth.sendRecovery(email);
+      $('#authTitle').textContent = 'Create a new password';
+      $('#authBody').innerHTML = `<form onsubmit="return CODEVAPP.doReset(event,'${esc(email)}')">
+        <p class="small muted" style="margin:0 0 10px">We emailed a 6-digit code to <b>${esc(email)}</b>. Enter it and choose a new password.</p>
+        <div class="field"><label>6-digit code</label><input name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" required autofocus></div>
+        ${passField('New password', 'pass', 'minlength="6" required')}
+        <button class="btn primary" style="width:100%" id="rpBtn">Update password &amp; sign in</button>
+        <p class="tiny muted center" style="margin-top:10px">Didn't get it? <a href="#" onclick="CODEVAPP.resendRecovery('${esc(email)}');return false">Resend</a> · also check spam.</p></form>`;
+    } catch (err) { toast(mailErr(err) || 'Could not send code'); btn.disabled = false; btn.textContent = 'Send reset code'; }
+    return false; }
+  async function doReset(e, email) { e.preventDefault(); const code = e.target.code.value.trim(); const password = e.target.pass.value; const btn = $('#rpBtn'); btn.disabled = true; btn.textContent = 'Updating…';
+    try { await auth.resetPassword({ email, code, password }); toast("Password updated — you're signed in"); await afterAuth(); }
+    catch (err) { toast(err.message || 'Invalid or expired code'); btn.disabled = false; btn.textContent = 'Update password & sign in'; }
+    return false; }
+  async function resendRecovery(email) { try { await auth.sendRecovery(email); toast('New code sent'); } catch (err) { toast(mailErr(err)); } }
   function mfaGate() { if (!CFG.configured || !me() || auth.mfaOk()) return false; startEmailCode(me().email); return true; }
   async function afterAuth() {
     const u = me();
@@ -297,7 +327,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, confirmCode, resendCode, togglePass, addPhotos, removePhoto, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, _afterAuth: null };
   window.addEventListener('hashchange', route);
   document.addEventListener('DOMContentLoaded', () => { renderAuthArea(); route(); });
   renderAuthArea(); route();

@@ -82,6 +82,14 @@ window.CODEV = (function () {
     async verifyEmailCode({ email, code }) { const d = await sb('/auth/v1/verify', { method: 'POST', anon: true, body: { email, token: String(code), type: 'email' } }); const s = await hydrate(d); s.mfa = { method: 'email', verified: true }; setSession(s); return s; },
     // Send the role-based welcome email once, after the user completes 2FA (idempotent server-side).
     async welcome() { try { await sb('/rest/v1/rpc/send_welcome_if_needed', { method: 'POST', body: {} }); } catch {} },
+    // Password reset via emailed 6-digit code.
+    async sendRecovery(email) { return sb('/auth/v1/recover', { method: 'POST', anon: true, body: { email } }); },
+    async resetPassword({ email, code, password }) {
+      const d = await sb('/auth/v1/verify', { method: 'POST', anon: true, body: { email, token: String(code), type: 'recovery' } });
+      const s = await hydrate(d); s.mfa = { method: 'recovery', verified: true }; setSession(s);
+      await sb('/auth/v1/user', { method: 'PUT', body: { password } });   // uses the recovery session bearer
+      return s;
+    },
     async signOut() { try { await sb('/auth/v1/logout', { method: 'POST' }); } catch {} setSession(null); },
     async refreshProfile() { const s = getSession(); if (!s) return null; const p = await fetchProfile(s.user.id); if (p) { s.profile = p; setSession(s); } return p; },
     mfaOk() { const s = getSession(); return !!(s && s.mfa && s.mfa.verified); },
@@ -155,6 +163,7 @@ window.CODEV = (function () {
     async signOut() { localStorage.removeItem(L.sess); },
     async refreshProfile() { return rd(L.sess, null); },
     mfaOk() { return true; }, async listFactors() { return []; }, async welcome() {},
+    async sendRecovery() {}, async resetPassword() { throw new Error('Password reset needs the live backend'); },
   };
   const localDB = {
     properties: {
