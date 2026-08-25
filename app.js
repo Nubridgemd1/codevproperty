@@ -24,9 +24,18 @@
   // ---- auth modal ----
   function openAuth(mode, then) { CODEVAPP._afterAuth = then || null; $('#authTitle').textContent = mode === 'signup' ? 'Create your account' : 'Sign in'; $('#authBody').innerHTML = mode === 'signup' ? signupForm() : signinForm(); $('#authModal').classList.add('show'); }
   function closeAuth() { $('#authModal').classList.remove('show'); }
+  // Password input with a show/hide eye toggle.
+  function passField(label, name, extra) { return `<div class="field"><label>${label}</label>
+    <div style="position:relative">
+      <input name="${name}" type="password" ${extra || ''} style="width:100%;padding-right:42px">
+      <button type="button" tabindex="-1" aria-label="Show password" onclick="CODEVAPP.togglePass(this)"
+        style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:4px;opacity:.7">👁</button>
+    </div></div>`; }
+  function togglePass(btn) { const i = btn.parentNode.querySelector('input'); if (!i) return; const show = i.type === 'password';
+    i.type = show ? 'text' : 'password'; btn.textContent = show ? '🙈' : '👁'; btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password'); }
   function signinForm() { return `<form onsubmit="return CODEVAPP.doSignin(event)">
     <div class="field"><label>Email</label><input name="email" type="email" required></div>
-    <div class="field"><label>Password</label><input name="pass" type="password" required></div>
+    ${passField('Password', 'pass', 'required')}
     <button class="btn primary" style="width:100%" id="siBtn">Sign in</button>
     <p class="small muted center" style="margin-top:12px">New here? <a href="#" onclick="CODEVAPP.openAuth('signup');return false">Create an account</a></p></form>`; }
   function signupForm() { return `<form onsubmit="return CODEVAPP.doSignup(event)">
@@ -36,44 +45,60 @@
       <option value="investor">Investor — co-develop verified property</option>
       <option value="developer">Developer — list &amp; raise co-development capital</option>
       <option value="visitor">Property owner — list my property</option></select></div>
-    <div class="field"><label>Password</label><input name="pass" type="password" minlength="6" required></div>
+    ${passField('Password', 'pass', 'minlength="6" required')}
     <button class="btn primary" style="width:100%" id="suBtn">Create account</button>
-    <p class="tiny muted center" style="margin-top:12px">Sandbox — no real capital/KYC/escrow. ${CFG.configured ? 'A 6-digit code is emailed to verify each sign-in (2FA).' : 'Local demo mode.'}</p>
-    <p class="small muted center">Have an account? <a href="#" onclick="CODEVAPP.openAuth('signin');return false">Sign in</a></p></form>`; }
+    <p class="small muted center" style="margin-top:12px">Have an account? <a href="#" onclick="CODEVAPP.openAuth('signin');return false">Sign in</a></p></form>`; }
+
+  // Friendly message when the mail provider (Supabase SMTP) can't deliver the code.
+  function mailErr(err) { const m = (err && err.message) || '';
+    if (/magic link|sending|smtp|rate limit|\(5\d\d\)|\(429\)/i.test(m)) return 'We couldn’t email your code right now. Please try again in a moment.';
+    return m || 'Could not send code'; }
 
   async function doSignin(e) { e.preventDefault(); const f = e.target; const email = f.email.value.trim(); const btn = $('#siBtn'); btn.disabled = true; btn.textContent = 'Checking…';
     try {
       if (CFG.configured) {
         await auth.passwordCheck({ email, password: f.pass.value });          // factor 1: password (no session yet)
-        btn.textContent = 'Emailing code…'; await startEmailCode(email); return false;   // factor 2: emailed code
+        btn.textContent = 'Emailing code…';
+        const sent = await startEmailCode(email);                             // factor 2: emailed code
+        if (!sent) { btn.disabled = false; btn.textContent = 'Sign in'; }
+        return false;
       }
       await auth.signIn({ email, password: f.pass.value }); await afterAuth();
     } catch (err) { toast(err.message || 'Invalid email or password'); btn.disabled = false; btn.textContent = 'Sign in'; } return false; }
   async function doSignup(e) { e.preventDefault(); const f = e.target; const email = f.email.value.trim(); const btn = $('#suBtn'); btn.disabled = true; btn.textContent = 'Creating…';
     try {
       if (CFG.configured) {
-        await auth.startSignup({ name: f.name.value.trim(), email, role: f.role.value, password: f.pass.value });
-        btn.textContent = 'Emailing code…'; await startEmailCode(email); return false;   // verify via emailed code
+        const d = await auth.startSignup({ name: f.name.value.trim(), email, role: f.role.value, password: f.pass.value });
+        btn.textContent = 'Emailing code…';
+        const sent = await startEmailCode(email);                            // verify via emailed code
+        if (!sent) {
+          // Mailer is down — don't strand the client. The account is already created & auto-confirmed.
+          if (d && d.access_token) { await auth.completeSignup(d); toast('Account created — welcome to CoDevelop!'); await afterAuth(); }
+          else { toast('Your account was created, but the verification email is temporarily unavailable. Please try Sign in shortly.'); btn.disabled = false; btn.textContent = 'Create account'; }
+        }
+        return false;
       }
       await auth.signUp({ name: f.name.value.trim(), email, role: f.role.value, password: f.pass.value }); toast('Welcome to CoDevelop!'); await afterAuth();
     } catch (err) { toast(err.message || 'Sign up failed'); btn.disabled = false; btn.textContent = 'Create account'; } return false; }
 
   // ---- 2FA via emailed code (required for all public accounts) ----
+  // Returns true if a code was sent and the entry form is shown; false if delivery failed.
   async function startEmailCode(email) {
-    try { await auth.sendEmailCode(email);
-      $('#authTitle').textContent = 'Check your email';
-      $('#authBody').innerHTML = `<p class="small muted">We emailed a 6-digit verification code to <b>${esc(email)}</b>. Enter it to finish signing in.</p>
-        <form onsubmit="return CODEVAPP.confirmCode(event,'${esc(email)}')">
-          <div class="field"><label>6-digit code</label><input name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" required autofocus></div>
-          <button class="btn primary" style="width:100%" id="ecBtn">Verify &amp; continue</button></form>
-        <p class="tiny muted center" style="margin-top:10px">Didn't get it? <a href="#" onclick="CODEVAPP.resendCode('${esc(email)}');return false">Resend code</a> · also check spam.</p>`;
-      $('#authModal').classList.add('show');
-    } catch (err) { toast(err.message || 'Could not send code'); }
+    try { await auth.sendEmailCode(email); }
+    catch (err) { toast(mailErr(err)); return false; }
+    $('#authTitle').textContent = 'Check your email';
+    $('#authBody').innerHTML = `<p class="small muted">We emailed a 6-digit verification code to <b>${esc(email)}</b>. Enter it to finish signing in.</p>
+      <form onsubmit="return CODEVAPP.confirmCode(event,'${esc(email)}')">
+        <div class="field"><label>6-digit code</label><input name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" required autofocus></div>
+        <button class="btn primary" style="width:100%" id="ecBtn">Verify &amp; continue</button></form>
+      <p class="tiny muted center" style="margin-top:10px">Didn't get it? <a href="#" onclick="CODEVAPP.resendCode('${esc(email)}');return false">Resend code</a> · also check spam.</p>`;
+    $('#authModal').classList.add('show');
+    return true;
   }
   async function confirmCode(e, email) { e.preventDefault(); const code = e.target.code.value.trim(); const btn = $('#ecBtn'); btn.disabled = true; btn.textContent = 'Verifying…';
     try { await auth.verifyEmailCode({ email, code }); await afterAuth(); }
     catch (err) { toast(err.message || 'Invalid or expired code'); btn.disabled = false; btn.textContent = 'Verify & continue'; } return false; }
-  async function resendCode(email) { try { await auth.sendEmailCode(email); toast('New code sent'); } catch (err) { toast(err.message || 'Could not resend'); } }
+  async function resendCode(email) { try { await auth.sendEmailCode(email); toast('New code sent'); } catch (err) { toast(mailErr(err)); } }
   function mfaGate() { if (!CFG.configured || !me() || auth.mfaOk()) return false; startEmailCode(me().email); return true; }
   async function afterAuth() {
     const u = me();
@@ -216,7 +241,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, confirmCode, resendCode, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, confirmCode, resendCode, togglePass, _afterAuth: null };
   window.addEventListener('hashchange', route);
   document.addEventListener('DOMContentLoaded', () => { renderAuthArea(); route(); });
   renderAuthArea(); route();

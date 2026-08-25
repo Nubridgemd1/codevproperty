@@ -74,6 +74,10 @@ window.CODEV = (function () {
     async passwordCheck({ email, password }) { await sb('/auth/v1/token?grant_type=password', { method: 'POST', anon: true, body: { email, password } }); return true; },
     async startSignup({ name, email, password, role }) { return sb('/auth/v1/signup', { method: 'POST', anon: true, body: { email, password, data: { name, role } } }); },
     async sendEmailCode(email) { return sb('/auth/v1/otp', { method: 'POST', anon: true, body: { email, should_create_user: false } }); },
+    // Finish account-opening from the signup response when the verification email can't be sent
+    // (mailer outage). The account is already created & auto-confirmed by Supabase, so we complete
+    // the session rather than stranding the client. Normal email 2FA resumes once mail is restored.
+    async completeSignup(d) { if (!d || !d.access_token) return null; const s = await hydrate(d); s.mfa = { method: 'signup', verified: true }; setSession(s); return s; },
     async verifyEmailCode({ email, code }) { const d = await sb('/auth/v1/verify', { method: 'POST', anon: true, body: { email, token: String(code), type: 'email' } }); const s = await hydrate(d); s.mfa = { method: 'email', verified: true }; setSession(s); return s; },
     async signOut() { try { await sb('/auth/v1/logout', { method: 'POST' }); } catch {} setSession(null); },
     async refreshProfile() { const s = getSession(); if (!s) return null; const p = await fetchProfile(s.user.id); if (p) { s.profile = p; setSession(s); } return p; },
