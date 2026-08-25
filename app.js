@@ -54,32 +54,29 @@
     if (/magic link|sending|smtp|rate limit|\(5\d\d\)|\(429\)/i.test(m)) return 'We couldn’t email your code right now. Please try again in a moment.';
     return m || 'Could not send code'; }
 
-  async function doSignin(e) { e.preventDefault(); const f = e.target; const email = f.email.value.trim(); const btn = $('#siBtn'); btn.disabled = true; btn.textContent = 'Checking…';
+  // NOTE: Email-code 2FA is disabled while Supabase SMTP delivery is down (OTP send returns 500).
+  // Password is the sole factor; accounts auto-confirm. Re-enable 2FA (startEmailCode) once SMTP works.
+  async function doSignin(e) { e.preventDefault(); const f = e.target; const email = f.email.value.trim(); const btn = $('#siBtn'); btn.disabled = true; btn.textContent = 'Signing in…';
+    try { await auth.signIn({ email, password: f.pass.value }); await afterAuth(); }
+    catch (err) { toast(err.message || 'Invalid email or password'); btn.disabled = false; btn.textContent = 'Sign in'; }
+    return false; }
+  async function doSignup(e) { e.preventDefault(); const f = e.target;
+    const email = f.email.value.trim(), name = f.name.value.trim(), role = f.role.value, pass = f.pass.value;
+    const btn = $('#suBtn'); btn.disabled = true; btn.textContent = 'Creating…';
     try {
       if (CFG.configured) {
-        await auth.passwordCheck({ email, password: f.pass.value });          // factor 1: password (no session yet)
-        btn.textContent = 'Emailing code…';
-        const sent = await startEmailCode(email);                             // factor 2: emailed code
-        if (!sent) { btn.disabled = false; btn.textContent = 'Sign in'; }
-        return false;
+        let d;
+        try { d = await auth.startSignup({ name, email, role, password: pass }); }
+        catch (err) { // Already have an account? Sign them in with the password they entered.
+          if (/already|registered|taken/i.test(err.message || '')) { await auth.signIn({ email, password: pass }); await afterAuth(); return false; }
+          throw err; }
+        // Account is auto-confirmed — complete straight from the signup session (no email needed).
+        if (d && d.access_token) await auth.completeSignup(d); else await auth.signIn({ email, password: pass });
+        toast('Welcome to CoDevelop!'); await afterAuth(); return false;
       }
-      await auth.signIn({ email, password: f.pass.value }); await afterAuth();
-    } catch (err) { toast(err.message || 'Invalid email or password'); btn.disabled = false; btn.textContent = 'Sign in'; } return false; }
-  async function doSignup(e) { e.preventDefault(); const f = e.target; const email = f.email.value.trim(); const btn = $('#suBtn'); btn.disabled = true; btn.textContent = 'Creating…';
-    try {
-      if (CFG.configured) {
-        const d = await auth.startSignup({ name: f.name.value.trim(), email, role: f.role.value, password: f.pass.value });
-        btn.textContent = 'Emailing code…';
-        const sent = await startEmailCode(email);                            // verify via emailed code
-        if (!sent) {
-          // Mailer is down — don't strand the client. The account is already created & auto-confirmed.
-          if (d && d.access_token) { await auth.completeSignup(d); toast('Account created — welcome to CoDevelop!'); await afterAuth(); }
-          else { toast('Your account was created, but the verification email is temporarily unavailable. Please try Sign in shortly.'); btn.disabled = false; btn.textContent = 'Create account'; }
-        }
-        return false;
-      }
-      await auth.signUp({ name: f.name.value.trim(), email, role: f.role.value, password: f.pass.value }); toast('Welcome to CoDevelop!'); await afterAuth();
-    } catch (err) { toast(err.message || 'Sign up failed'); btn.disabled = false; btn.textContent = 'Create account'; } return false; }
+      await auth.signUp({ name, email, role, password: pass }); toast('Welcome to CoDevelop!'); await afterAuth();
+    } catch (err) { toast(err.message || 'Sign up failed'); btn.disabled = false; btn.textContent = 'Create account'; }
+    return false; }
 
   // ---- 2FA via emailed code (required for all public accounts) ----
   // Returns true if a code was sent and the entry form is shown; false if delivery failed.
@@ -99,7 +96,7 @@
     try { await auth.verifyEmailCode({ email, code }); await afterAuth(); }
     catch (err) { toast(err.message || 'Invalid or expired code'); btn.disabled = false; btn.textContent = 'Verify & continue'; } return false; }
   async function resendCode(email) { try { await auth.sendEmailCode(email); toast('New code sent'); } catch (err) { toast(mailErr(err)); } }
-  function mfaGate() { if (!CFG.configured || !me() || auth.mfaOk()) return false; startEmailCode(me().email); return true; }
+  function mfaGate() { return false; } // Email 2FA gate disabled while SMTP delivery is down (password is the sole factor).
   async function afterAuth() {
     const u = me();
     if (u && u.status === 'suspended') { await auth.signOut(); renderAuthArea(); closeAuth(); toast('Account suspended — contact admin'); location.hash = '#/'; route(); return; }
