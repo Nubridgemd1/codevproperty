@@ -130,11 +130,27 @@
     return false; }
   async function resendRecovery(email) { try { await auth.sendRecovery(email); toast('New code sent'); } catch (err) { toast(mailErr(err)); } }
   function mfaGate() { if (!CFG.configured || !me() || auth.mfaOk()) return false; startEmailCode(me().email); return true; }
+  // ---- admin-verification gate: an account holder must be admin-approved before any platform access ----
+  function isApproved(u) { u = u || me(); if (!u) return false; const st = String(u.status || '').toLowerCase(); return st === 'approved' || st === 'active'; }
+  function needsApproval() { return CFG.configured && !!me() && !isApproved(me()); }
+  function pendingScreen() {
+    const st = String((me() || {}).status || 'pending').toLowerCase();
+    const blocked = st === 'rejected' || st === 'suspended';
+    return sec(
+      blocked ? 'Account not approved' : 'Account pending verification',
+      blocked
+        ? 'Your account is not approved for platform access. Please contact the CoDevelop team at info@codevproperty.com if you believe this is a mistake.'
+        : 'Thank you for signing up. An administrator is reviewing and verifying your account. As soon as it is approved you will be able to view opportunities, list a development and use the platform — we will email you when you are cleared. You are securely signed in; you can log out from the top right.',
+      '');
+  }
   async function afterAuth() {
     const u = me();
     if (u && u.status === 'suspended') { await auth.signOut(); renderAuthArea(); closeAuth(); toast('Account suspended — contact admin'); location.hash = '#/'; route(); return; }
     if (u && u.role === 'admin') { closeAuth(); toast('Admins use the Admin console'); location.href = 'admin.html'; return; }
-    closeAuth(); renderAuthArea(); const then = CODEVAPP._afterAuth; CODEVAPP._afterAuth = null;
+    closeAuth(); renderAuthArea();
+    try { await auth.refreshProfile(); } catch {}
+    if (needsApproval()) { location.hash = '#/'; route(); return; }
+    const then = CODEVAPP._afterAuth; CODEVAPP._afterAuth = null;
     if (then) then(); else { location.hash = u.role === 'developer' ? '#/developer' : u.role === 'investor' ? '#/investor' : '#/account'; } route();
   }
   async function logout() { await auth.signOut(); renderAuthArea(); toast('Logged out'); location.hash = '#/'; route(); }
@@ -311,6 +327,8 @@
     const gated = ['list', 'investor', 'developer', 'account'];
     if (gated.includes(path) && !requireLogin(() => route())) { app.innerHTML = sec('Sign in required', 'Please sign in to continue.', ''); return; }
     if (gated.includes(path) && mfaGate()) { app.innerHTML = sec('Two-factor required', 'Complete two-factor authentication to continue.', ''); return; }
+    // Admin-verification gate: a signed-in account holder cannot operate, list or view until approved.
+    if (needsApproval()) { try { await auth.refreshProfile(); } catch {} if (needsApproval()) { app.innerHTML = pendingScreen(); return; } }
     app.innerHTML = loading();
     try {
       const u = me();

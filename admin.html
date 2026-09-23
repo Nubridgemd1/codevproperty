@@ -113,7 +113,7 @@
     catch(err){ toast(err.message||'Load failed'); }
     renderStats(); tab(curTab);
   }
-  function renderStats(){ const st=[['Properties',PROPS.length],['Pending review',PROPS.filter(p=>p.status==='pending').length],['Accounts',ACCS.length],['Verified live',PROPS.filter(p=>p.status==='verified').length]];
+  function renderStats(){ const pendAcc=ACCS.filter(a=>a.role!=='admin'&&['pending','under_review',''].includes(String(a.status||'').toLowerCase())).length; const st=[['Accounts awaiting approval',pendAcc],['Properties pending',PROPS.filter(p=>p.status==='pending').length],['Accounts',ACCS.length],['Verified live',PROPS.filter(p=>p.status==='verified').length]];
     $('#stats').innerHTML=st.map(s=>`<div class="stat"><div class="n">${s[1]}</div><div class="l">${s[0]}</div></div>`).join(''); }
   function tab(t){ curTab=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.t===t)); $('#panel').innerHTML = t==='accounts'?accountsPanel():propertiesPanel(); }
 
@@ -199,12 +199,17 @@
 
   // ---------- ACCOUNTS ----------
   function accountsPanel(){
+    const badgeCls=(s)=>{ s=String(s||'').toLowerCase(); return (s==='approved'||s==='active')?'verified':((s==='rejected'||s==='suspended')?'role':'pending'); };
+    const acctActions=(a)=>{ if(a.role==='admin') return ''; const s=String(a.status||'pending').toLowerCase();
+      if(s==='pending'||s==='under_review'||s==='') return `<button class="btn primary sm" onclick="ADMIN.setAcctStatus('${a.id}','approved')">Approve</button> <button class="btn sm danger" onclick="ADMIN.setAcctStatus('${a.id}','rejected')">Reject</button>`;
+      if(s==='approved'||s==='active') return `<button class="btn sm" onclick="ADMIN.setAcctStatus('${a.id}','suspended')">Suspend</button>`;
+      return `<button class="btn primary sm" onclick="ADMIN.setAcctStatus('${a.id}','approved')">Approve</button>`; };
     const rows=ACCS.map(a=>`<tr>
       <td><b>${esc(a.name||'—')}</b><div class="tiny muted">${esc(a.email||'')}</div></td>
       <td>${a.role==='admin'?'<span class="badge role" style="background:#e9dfc7;color:#8a6113">admin</span>':`<select onchange="ADMIN.setRole('${a.id}',this.value)" style="padding:5px 8px;width:auto">${['investor','developer','visitor','admin'].map(r=>`<option ${r===a.role?'selected':''}>${r}</option>`).join('')}</select>`}</td>
-      <td><span class="badge ${a.status==='active'?'verified':'pending'}">${a.status||'active'}</span></td>
+      <td><span class="badge ${badgeCls(a.status)}">${esc(a.status||'pending')}</span></td>
       <td class="tiny muted">${a.createdAt?new Date(a.createdAt).toLocaleDateString():''}</td>
-      <td style="white-space:nowrap;text-align:right"><button class="btn sm" onclick="ADMIN.toggleStatus('${a.id}','${a.status||'active'}')">${(a.status||'active')==='active'?'Suspend':'Activate'}</button>
+      <td style="white-space:nowrap;text-align:right">${acctActions(a)}
         <button class="btn ghost sm" onclick="ADMIN.delAcc('${a.id}')">🗑</button></td></tr>`).join('');
     return `<div class="spread" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px">Accounts</h3><button class="btn primary sm" onclick="ADMIN.addAcc()">+ Add account</button></div>
       <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
@@ -221,15 +226,16 @@
     $('#modal').classList.add('show'); }
   async function saveAcc(e){ e.preventDefault(); const f=e.target;
     try{ const role=f.role.value; const d=await db.profiles.add({name:f.name.value.trim(),email:f.email.value.trim(),role,password:f.pass.value});
-      const newId=d && d.user && d.user.id; if(newId && CFG.configured){ try{ await db.profiles.update(newId,{role,name:f.name.value.trim(),status:'active'}); }catch{} }
+      const newId=d && d.user && d.user.id; if(newId && CFG.configured){ try{ await db.profiles.update(newId,{role,name:f.name.value.trim(),status:'approved'}); }catch{} }
       closeModal(); toast('Account created'); await load();
     }catch(err){ toast(err.message||'Could not create'); } return false; }
   async function setRole(id,role){ try{ await db.profiles.update(id,{role}); toast('Role updated'); await load(); }catch(err){toast(err.message);} }
   async function toggleStatus(id,cur){ try{ await db.profiles.update(id,{status:cur==='active'?'suspended':'active'}); toast('Account '+(cur==='active'?'suspended':'activated')); await load(); }catch(err){toast(err.message);} }
+  async function setAcctStatus(id,s){ try{ await db.profiles.update(id,{status:s}); toast(s==='approved'?'Account approved — access granted':('Account '+s)); await load(); }catch(err){toast(err.message);} }
   async function delAcc(id){ const a=ACCS.find(x=>x.id===id); if(confirm('Delete account "'+(a.name||a.email)+'"?')){ try{ await db.profiles.remove(id); toast('Account deleted'); await load(); }catch(err){toast(err.message);} } }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,addAcc,saveAcc,setRole,toggleStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset};
+  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset};
 
   renderGate();
   // auto-resume
