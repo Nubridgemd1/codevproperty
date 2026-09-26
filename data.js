@@ -23,7 +23,21 @@ window.CODEV = (function () {
     ],
     MILESTONE_STATUS: ['pending', 'in-progress', 'certified'],
     PAYMENT_STATUS: ['due', 'paid'],
+    // Admin role-based access control. An admin's `permissions` array grants specific rights.
+    PERMISSIONS: [
+      ['manage_admins',   'Manage admins & rights', 'Create admins and set what they can do'],
+      ['verify_accounts', 'Verify accounts',        'Approve, reject or suspend member accounts'],
+      ['manage_listings', 'Manage developments',    'Verify, edit, reject & delete developments and milestones'],
+      ['manage_accounts', 'Manage member accounts', 'Add members, change roles, delete accounts'],
+    ],
+    ADMIN_PRESETS: {
+      'Super admin':      ['manage_admins', 'verify_accounts', 'manage_listings', 'manage_accounts'],
+      'Verifier':         ['verify_accounts'],
+      'Listings manager': ['manage_listings'],
+      'Accounts manager': ['verify_accounts', 'manage_accounts'],
+    },
   };
+  CFG.ALL_PERMISSIONS = CFG.PERMISSIONS.map(p => p[0]);
   const defaultMilestones = () => CFG.MILESTONE_TEMPLATE.map(m => ({ name: m.name, pct: m.pct, status: 'pending', targetDate: '', releasedDate: '' }));
 
   const SKEY = 'codev_sb_session';
@@ -53,7 +67,8 @@ window.CODEV = (function () {
     submittedBy: r.submitted_by_email, submittedByRole: r.submitted_by_role, createdAt: r.created_at, verifiedAt: r.verified_at,
     milestones: Array.isArray(r.milestones) ? r.milestones : [], payments: Array.isArray(r.payments) ? r.payments : [],
     images: Array.isArray(r.images) ? r.images : [] });
-  const toAcc = (r) => ({ id: r.id, name: r.name, email: r.email, role: r.role, status: r.status, createdAt: r.created_at });
+  const toAcc = (r) => ({ id: r.id, name: r.name, email: r.email, role: r.role, status: r.status, createdAt: r.created_at,
+    permissions: Array.isArray(r.permissions) ? r.permissions : [] });
 
   // ================= SUPABASE MODE =================
   async function fetchProfile(id) { const r = await sb('/rest/v1/profiles?id=eq.' + id + '&select=*'); return r && r[0] ? toAcc(r[0]) : null; }
@@ -148,7 +163,7 @@ window.CODEV = (function () {
   const H = (s) => btoa(unescape(encodeURIComponent(s || '')));
   function localSeed() {
     if (rd(L.seed, false)) return;
-    wr(L.acc, [{ id: uid(), name: 'Platform Admin', email: 'admin@codevproperty.com', pass: H('admin2026'), role: 'admin', status: 'active', createdAt: nowISO() }]);
+    wr(L.acc, [{ id: uid(), name: 'Platform Admin', email: 'admin@codevproperty.com', pass: H('admin2026'), role: 'admin', status: 'active', createdAt: nowISO(), permissions: ['manage_admins', 'verify_accounts', 'manage_listings', 'manage_accounts'] }]);
     wr(L.prop, [{ id: uid(), title: 'Ivory Residences', developer: 'Meridian Developments', location: 'Ikoyi, Lagos', summary: '24 curated waterfront-adjacent residences.', priceFrom: 45000000, stage: 'Foundation', status: 'verified', submittedByRole: 'developer', submittedBy: 'dev@meridian.example', createdAt: nowISO() }]);
     wr(L.seed, true);
   }
