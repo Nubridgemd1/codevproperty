@@ -50,6 +50,15 @@
   let curTab='properties'; let PROPS=[], ACCS=[];
   const toast=(m)=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2800);};
 
+  // ---------- role-based access control ----------
+  const PERMS = CFG.PERMISSIONS || []; const ALLP = CFG.ALL_PERMISSIONS || [];
+  function myProfile(){ return CFG.configured ? auth.profile() : { role:'admin', email:CFG.ADMIN_EMAIL, permissions:ALLP.slice() }; }
+  function myPerms(){ const p=myProfile()||{}; if(String(p.email||'').toLowerCase()===String(CFG.ADMIN_EMAIL||'').toLowerCase()) return ALLP.slice();
+    const perms=Array.isArray(p.permissions)?p.permissions:[]; if(p.role==='admin' && perms.length===0) return ALLP.slice(); /* legacy admin = full */ return perms; }
+  const can = (k)=> myPerms().indexOf(k)>=0;
+  const permLabel = (k)=>{ const f=PERMS.find(x=>x[0]===k); return f?f[1]:k; };
+  const isMe = (a)=>{ const p=myProfile()||{}; return a && (a.id===p.id || (a.email && p.email && a.email.toLowerCase()===p.email.toLowerCase())); };
+
   // ---------- gate ----------
   function renderGate(){
     $('#gate').innerHTML = `<div class="brand" style="justify-content:center;margin-bottom:14px"><span class="logo" style="border-color:var(--bronze)">C</span><span><b>CoDevelop</b><small>Admin Console</small></span></div>
@@ -115,21 +124,25 @@
   }
   function renderStats(){ const pendAcc=ACCS.filter(a=>a.role!=='admin'&&['pending','under_review',''].includes(String(a.status||'').toLowerCase())).length; const st=[['Accounts awaiting approval',pendAcc],['Properties pending',PROPS.filter(p=>p.status==='pending').length],['Accounts',ACCS.length],['Verified live',PROPS.filter(p=>p.status==='verified').length]];
     $('#stats').innerHTML=st.map(s=>`<div class="stat"><div class="n">${s[1]}</div><div class="l">${s[0]}</div></div>`).join(''); }
-  function tab(t){ curTab=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.t===t)); $('#panel').innerHTML = t==='accounts'?accountsPanel():propertiesPanel(); }
+  function renderTabs(){ const tabs=[['properties','Developments'],['accounts','Accounts']]; if(can('manage_admins')) tabs.push(['admins','Admins &amp; roles']);
+    if(!tabs.some(x=>x[0]===curTab)) curTab='properties';
+    const bar=document.querySelector('.tabs'); if(bar) bar.innerHTML=tabs.map(t=>`<button class="tab ${t[0]===curTab?'active':''}" data-t="${t[0]}" onclick="ADMIN.tab('${t[0]}')">${t[1]}</button>`).join(''); }
+  function tab(t){ curTab=t; renderTabs(); $('#panel').innerHTML = t==='admins'?adminsPanel():(t==='accounts'?accountsPanel():propertiesPanel()); }
 
   // ---------- PROPERTIES ----------
   function fundedPct(p){ return (p.milestones||[]).filter(m=>m.status==='certified').reduce((n,m)=>n+(Number(m.pct)||0),0); }
   function propertiesPanel(){
+    const canL=can('manage_listings');
     const rows=PROPS.map(p=>`<tr>
       <td><b>${esc(p.title)}</b><div class="tiny muted">${esc(p.location)} · funded ${fundedPct(p)}%</div></td>
       <td>${esc(p.developer||'')}<div class="tiny muted">${esc(p.submittedBy||'')} · <span class="badge role">${p.submittedByRole||'—'}</span></div></td>
       <td>${fmtN(p.priceFrom)}<div class="tiny muted">${esc(p.stage||'')}</div></td>
       <td><span class="badge ${p.status}">${p.status}</span></td>
-      <td style="white-space:nowrap;text-align:right">
+      <td style="white-space:nowrap;text-align:right">${canL?`
         ${p.status!=='verified'?`<button class="btn sm" style="color:var(--green);border-color:#cfe6da" onclick="ADMIN.setStatus('${p.id}','verified')">✓ Verify</button>`:''}
         ${p.status!=='rejected'?`<button class="btn sm danger" onclick="ADMIN.setStatus('${p.id}','rejected')">Reject</button>`:''}
         <button class="btn sm navy" onclick="ADMIN.editProp('${p.id}')">Edit · milestones</button>
-        <button class="btn ghost sm" onclick="ADMIN.delProp('${p.id}')">🗑</button></td></tr>`).join('');
+        <button class="btn ghost sm" onclick="ADMIN.delProp('${p.id}')">🗑</button>`:'<span class="tiny muted">View only</span>'}</td></tr>`).join('');
     return `<div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Property</th><th>Lister</th><th>From / Stage</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
       <tbody>${rows||`<tr><td colspan="5" class="center muted" style="padding:24px">No properties yet.</td></tr>`}</tbody></table></div></div>
       <p class="tiny muted" style="margin-top:10px">Verify to publish. “Edit · milestones” lets you modify details, the milestone timeline and payments. Listings come from developers and property owners alike.</p>`;
@@ -199,29 +212,94 @@
 
   // ---------- ACCOUNTS ----------
   function accountsPanel(){
+    const canV=can('verify_accounts'), canA=can('manage_accounts');
     const badgeCls=(s)=>{ s=String(s||'').toLowerCase(); return (s==='approved'||s==='active')?'verified':((s==='rejected'||s==='suspended')?'role':'pending'); };
-    const acctActions=(a)=>{ if(a.role==='admin') return ''; const s=String(a.status||'pending').toLowerCase();
+    const acctActions=(a)=>{ if(a.role==='admin'||!canV) return ''; const s=String(a.status||'pending').toLowerCase();
       if(s==='pending'||s==='under_review'||s==='') return `<button class="btn primary sm" onclick="ADMIN.setAcctStatus('${a.id}','approved')">Approve</button> <button class="btn sm danger" onclick="ADMIN.setAcctStatus('${a.id}','rejected')">Reject</button>`;
       if(s==='approved'||s==='active') return `<button class="btn sm" onclick="ADMIN.setAcctStatus('${a.id}','suspended')">Suspend</button>`;
       return `<button class="btn primary sm" onclick="ADMIN.setAcctStatus('${a.id}','approved')">Approve</button>`; };
+    const roleCell=(a)=>{ if(a.role==='admin') return '<span class="badge role" style="background:#e9dfc7;color:#8a6113">admin</span>';
+      return canA?`<select onchange="ADMIN.setRole('${a.id}',this.value)" style="padding:5px 8px;width:auto">${['investor','developer','visitor'].map(r=>`<option ${r===a.role?'selected':''}>${r}</option>`).join('')}</select>`:`<span class="badge role">${esc(a.role||'—')}</span>`; };
     const rows=ACCS.map(a=>`<tr>
       <td><b>${esc(a.name||'—')}</b><div class="tiny muted">${esc(a.email||'')}</div></td>
-      <td>${a.role==='admin'?'<span class="badge role" style="background:#e9dfc7;color:#8a6113">admin</span>':`<select onchange="ADMIN.setRole('${a.id}',this.value)" style="padding:5px 8px;width:auto">${['investor','developer','visitor','admin'].map(r=>`<option ${r===a.role?'selected':''}>${r}</option>`).join('')}</select>`}</td>
+      <td>${roleCell(a)}</td>
       <td><span class="badge ${badgeCls(a.status)}">${esc(a.status||'pending')}</span></td>
       <td class="tiny muted">${a.createdAt?new Date(a.createdAt).toLocaleDateString():''}</td>
       <td style="white-space:nowrap;text-align:right">${acctActions(a)}
-        <button class="btn ghost sm" onclick="ADMIN.delAcc('${a.id}')">🗑</button></td></tr>`).join('');
-    return `<div class="spread" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px">Accounts</h3><button class="btn primary sm" onclick="ADMIN.addAcc()">+ Add account</button></div>
+        ${(canA && a.role!=='admin')?`<button class="btn ghost sm" onclick="ADMIN.delAcc('${a.id}')">🗑</button>`:''}</td></tr>`).join('');
+    return `<div class="spread" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px">Accounts</h3>${canA?'<button class="btn primary sm" onclick="ADMIN.addAcc()">+ Add account</button>':''}</div>
       <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
       <tbody>${rows||`<tr><td colspan="5" class="center muted" style="padding:20px">No accounts yet.</td></tr>`}</tbody></table></div></div>
-      ${CFG.configured?'<p class="tiny muted" style="margin-top:10px">Adding an account creates a real login. Deleting removes their profile (they lose access).</p>':''}`;
+      <p class="tiny muted" style="margin-top:10px">${!canV&&!canA?'You have view-only access to accounts.':'Admin accounts are managed under <b>Admins &amp; roles</b>.'}</p>`;
   }
+
+  // ---------- ADMINS & ROLES (requires manage_admins) ----------
+  function permChips(perms){ perms=Array.isArray(perms)?perms:[]; if(!perms.length) return '<span class="tiny muted">view only</span>';
+    return perms.filter(k=>k!=='view').map(k=>`<span class="badge role" style="margin:2px 3px 0 0">${esc(permLabel(k))}</span>`).join(''); }
+  function adminsPanel(){
+    if(!can('manage_admins')) return '<div class="card pad muted">You do not have permission to manage admins.</div>';
+    const admins=ACCS.filter(a=>a.role==='admin');
+    const rows=admins.map(a=>{ const eff=(Array.isArray(a.permissions)&&a.permissions.length)?a.permissions:ALLP; const primary=String(a.email||'').toLowerCase()===String(CFG.ADMIN_EMAIL||'').toLowerCase();
+      return `<tr>
+        <td><b>${esc(a.name||'—')}</b>${primary?' <span class="badge role" style="background:#e9dfc7;color:#8a6113">primary</span>':''}${isMe(a)?' <span class="tiny muted">(you)</span>':''}<div class="tiny muted">${esc(a.email||'')}</div></td>
+        <td>${permChips(eff)}</td>
+        <td style="white-space:nowrap;text-align:right">
+          <button class="btn sm navy" onclick="ADMIN.editRights('${a.id}')">Edit rights</button>
+          ${(primary||isMe(a))?'':`<button class="btn ghost sm danger" onclick="ADMIN.revokeAdmin('${a.id}')">Revoke</button>`}</td></tr>`; }).join('');
+    return `<div class="spread" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px">Admins &amp; roles</h3><button class="btn primary sm" onclick="ADMIN.addAdmin()">+ Add admin</button></div>
+      <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Admin</th><th>Rights</th><th style="text-align:right">Manage</th></tr></thead>
+      <tbody>${rows||`<tr><td colspan="3" class="center muted" style="padding:20px">No admins yet.</td></tr>`}</tbody></table></div></div>
+      <p class="tiny muted" style="margin-top:10px">Grant each admin only the rights they need. The primary admin and your own account keep full access and can’t be revoked here.</p>`;
+  }
+  function permCheckboxes(sel){ sel=sel||[]; return `<div id="permBox" style="display:grid;gap:8px;margin-top:6px">${PERMS.map(p=>`
+      <label class="row" style="gap:9px;align-items:flex-start;cursor:pointer"><input type="checkbox" value="${p[0]}" ${sel.indexOf(p[0])>=0?'checked':''} style="margin-top:3px">
+        <span><b style="font-size:14px">${esc(p[1])}</b><div class="tiny muted">${esc(p[2]||'')}</div></span></label>`).join('')}</div>
+    <div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap">${Object.keys(CFG.ADMIN_PRESETS).map(name=>`<button type="button" class="btn ghost sm" onclick="ADMIN.applyPreset('${esc(name)}')">${esc(name)}</button>`).join('')}</div>`; }
+  function readPerms(){ return Array.from(document.querySelectorAll('#permBox input:checked')).map(i=>i.value); }
+  function applyPreset(name){ const set=(CFG.ADMIN_PRESETS[name]||[]); document.querySelectorAll('#permBox input').forEach(i=>{ i.checked=set.indexOf(i.value)>=0; }); }
+  function addAdmin(){ $('#mTitle').textContent='Add admin';
+    $('#mBody').innerHTML=`<div class="tabs" style="margin-bottom:14px"><button class="tab active" id="tabProm" type="button" onclick="ADMIN.admTab('prom')">Promote existing member</button><button class="tab" id="tabNew" type="button" onclick="ADMIN.admTab('new')">Create new admin</button></div>
+      <form onsubmit="return ADMIN.saveAdmin(event)">
+        <div id="admProm"><div class="field"><label>Member email</label><input name="pemail" type="email" placeholder="person@example.com"><div class="tiny muted">Must be an existing account. They’ll be granted admin with the rights below.</div></div></div>
+        <div id="admNew" class="hide"><div class="field"><label>Full name</label><input name="nname"></div>
+          <div class="field"><label>Email</label><input name="nemail" type="email"></div>
+          <div class="field"><label>Temp password</label><input name="npass" value="Codev1234!" minlength="6"></div></div>
+        <label style="margin-top:6px;display:block">Rights</label>${permCheckboxes(['verify_accounts'])}
+        <button class="btn primary" style="width:100%;margin-top:14px">Add admin</button></form>`;
+    admMode='prom'; $('#modal').classList.add('show'); }
+  let admMode='prom';
+  function admTab(m){ admMode=m; document.getElementById('tabProm').classList.toggle('active',m==='prom'); document.getElementById('tabNew').classList.toggle('active',m==='new'); document.getElementById('admProm').classList.toggle('hide',m!=='prom'); document.getElementById('admNew').classList.toggle('hide',m!=='new'); }
+  async function saveAdmin(e){ e.preventDefault(); const f=e.target; let perms=readPerms(); if(!perms.length) perms=['view'];
+    try{
+      if(admMode==='prom'){ const email=(f.pemail.value||'').trim().toLowerCase(); if(!email){toast('Enter the member email');return false;}
+        const a=ACCS.find(x=>String(x.email||'').toLowerCase()===email); if(!a){ toast('No account with that email — create a new admin instead'); return false; }
+        await db.profiles.update(a.id,{ role:'admin', status:'approved', permissions:perms });
+        closeModal(); toast('Admin added'); await load();
+      } else {
+        const name=(f.nname.value||'').trim(), email=(f.nemail.value||'').trim(), pass=f.npass.value;
+        if(!name||!email||!pass){toast('Complete name, email and password');return false;}
+        const d=await db.profiles.add({name,email,role:'admin',password:pass}); const newId=d&&d.user&&d.user.id;
+        if(newId && CFG.configured){ try{ await db.profiles.update(newId,{ role:'admin', name, status:'approved', permissions:perms }); }catch{} }
+        closeModal(); toast('Admin created'); await load();
+      }
+    }catch(err){ toast(err.message||'Could not add admin'); } return false; }
+  function editRights(id){ const a=ACCS.find(x=>x.id===id); if(!a) return; const cur=(Array.isArray(a.permissions)&&a.permissions.length)?a.permissions:ALLP.slice();
+    $('#mTitle').textContent='Edit rights: '+(a.name||a.email);
+    $('#mBody').innerHTML=`<form onsubmit="return ADMIN.saveRights(event,'${id}')"><p class="small muted" style="margin:0 0 8px">Choose what this admin can do.</p>${permCheckboxes(cur)}
+      <button class="btn primary" style="width:100%;margin-top:14px">Save rights</button></form>`;
+    $('#modal').classList.add('show'); }
+  async function saveRights(e,id){ e.preventDefault(); let perms=readPerms(); if(!perms.length) perms=['view'];
+    try{ await db.profiles.update(id,{permissions:perms}); closeModal(); toast('Rights updated'); await load(); }catch(err){ toast(err.message||'Save failed'); } return false; }
+  async function revokeAdmin(id){ const a=ACCS.find(x=>x.id===id); if(!a) return; if(isMe(a)){toast('You cannot revoke your own admin access');return;}
+    if(String(a.email||'').toLowerCase()===String(CFG.ADMIN_EMAIL||'').toLowerCase()){toast('The primary admin cannot be revoked');return;}
+    if(confirm('Revoke admin access for "'+(a.name||a.email)+'"? They become a regular member.')){ try{ await db.profiles.update(id,{role:'investor',permissions:[]}); toast('Admin access revoked'); await load(); }catch(err){toast(err.message);} } }
   function addAcc(){ $('#mTitle').textContent='Add account';
     $('#mBody').innerHTML=`<form onsubmit="return ADMIN.saveAcc(event)">
       <div class="field"><label>Full name / company</label><input name="name" required></div>
       <div class="field"><label>Email</label><input name="email" type="email" required></div>
-      <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Role</label><select name="role">${['investor','developer','visitor','admin'].map(r=>`<option>${r}</option>`).join('')}</select></div>
+      <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Role</label><select name="role">${['investor','developer','visitor'].map(r=>`<option>${r}</option>`).join('')}</select></div>
         <div class="field" style="flex:1"><label>Temp password</label><input name="pass" value="Codev1234" required minlength="6"></div></div>
+      <p class="tiny muted">To create an <b>admin</b>, use the “Admins &amp; roles” tab so you can set their specific rights.</p>
       <button class="btn primary" style="width:100%">Create account</button></form>`;
     $('#modal').classList.add('show'); }
   async function saveAcc(e){ e.preventDefault(); const f=e.target;
@@ -235,7 +313,8 @@
   async function delAcc(id){ const a=ACCS.find(x=>x.id===id); if(confirm('Delete account "'+(a.name||a.email)+'"?')){ try{ await db.profiles.remove(id); toast('Account deleted'); await load(); }catch(err){toast(err.message);} } }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset};
+  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+    addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset};
 
   renderGate();
   // auto-resume
