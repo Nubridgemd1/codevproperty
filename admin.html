@@ -131,9 +131,10 @@
 
   // ---------- PROPERTIES ----------
   function fundedPct(p){ return (p.milestones||[]).filter(m=>m.status==='certified').reduce((n,m)=>n+(Number(m.pct)||0),0); }
-  function propertiesPanel(){
+  function adminPropLocations(){ const s=new Set(); PROPS.forEach(p=>{ const l=(p.location||'').trim(); if(l) s.add(l); }); return Array.from(s).sort((a,b)=>a.localeCompare(b)); }
+  function propRowsHtml(list){
     const canL=can('manage_listings');
-    const rows=PROPS.map(p=>`<tr>
+    return (list||[]).map(p=>`<tr>
       <td><b>${esc(p.title)}</b><div class="tiny muted">${esc(p.location)} · funded ${fundedPct(p)}%</div></td>
       <td>${esc(p.developer||'')}<div class="tiny muted">${esc(p.submittedBy||'')} · <span class="badge role">${p.submittedByRole||'—'}</span></div></td>
       <td>${fmtN(p.priceFrom)}<div class="tiny muted">${esc(p.stage||'')}</div></td>
@@ -142,9 +143,26 @@
         ${p.status!=='verified'?`<button class="btn sm" style="color:var(--green);border-color:#cfe6da" onclick="ADMIN.setStatus('${p.id}','verified')">✓ Verify</button>`:''}
         ${p.status!=='rejected'?`<button class="btn sm danger" onclick="ADMIN.setStatus('${p.id}','rejected')">Reject</button>`:''}
         <button class="btn sm navy" onclick="ADMIN.editProp('${p.id}')">Edit · milestones</button>
-        <button class="btn ghost sm" onclick="ADMIN.delProp('${p.id}')">🗑</button>`:'<span class="tiny muted">View only</span>'}</td></tr>`).join('');
-    return `<div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Property</th><th>Lister</th><th>From / Stage</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
-      <tbody>${rows||`<tr><td colspan="5" class="center muted" style="padding:24px">No properties yet.</td></tr>`}</tbody></table></div></div>
+        <button class="btn ghost sm" onclick="ADMIN.delProp('${p.id}')">🗑</button>`:'<span class="tiny muted">View only</span>'}</td></tr>`).join('')
+      || `<tr><td colspan="5" class="center muted" style="padding:24px">No properties match your filter.</td></tr>`;
+  }
+  function filterProps(){
+    const loc=(document.getElementById('pLoc')||{}).value||'';
+    const q=((document.getElementById('pSearch')||{}).value||'').trim().toLowerCase();
+    let list=PROPS||[];
+    if(loc) list=list.filter(p=>(p.location||'').trim()===loc);
+    if(q) list=list.filter(p=>[p.title,p.developer,p.location,p.submittedBy,p.stage,p.status].some(x=>(x||'').toLowerCase().includes(q)));
+    const b=document.getElementById('propRows'); if(b) b.innerHTML=propRowsHtml(list);
+    const c=document.getElementById('pCount'); if(c) c.textContent=`${list.length} of ${(PROPS||[]).length} listing${(PROPS||[]).length===1?'':'s'}`;
+  }
+  function propertiesPanel(){
+    const locs=adminPropLocations(); const n=(PROPS||[]).length;
+    return `<div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <div class="field" style="margin:0;min-width:200px"><select id="pLoc" onchange="ADMIN.filterProps()" aria-label="Filter by location"><option value="">📍 All locations</option>${locs.map(l=>`<option value="${esc(l)}">${esc(l)}</option>`).join('')}</select></div>
+      <div class="field" style="margin:0;flex:1;min-width:200px"><input id="pSearch" type="search" placeholder="Search title, developer, lister or status…" oninput="ADMIN.filterProps()" aria-label="Search listings"></div>
+      <span id="pCount" class="small muted">${n} listing${n===1?'':'s'}</span></div>
+      <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Property</th><th>Lister</th><th>From / Stage</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+      <tbody id="propRows">${propRowsHtml(PROPS)}</tbody></table></div></div>
       <p class="tiny muted" style="margin-top:10px">Verify to publish. “Edit · milestones” lets you modify details, the milestone timeline and payments. Listings come from developers and property owners alike.</p>`;
   }
   async function setStatus(id,s){ try{ await db.properties.setStatus(id,s); toast('Listing '+(s==='verified'?'verified & published':s)); await load(); }catch(err){toast(err.message);} }
@@ -156,7 +174,7 @@
     $('#mBody').innerHTML=`<form onsubmit="return ADMIN.saveProp(event,'${id}')">
       <div class="field"><label>Title</label><input name="title" value="${esc(p.title)}" required></div>
       <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Developer / owner</label><input name="developer" value="${esc(p.developer||'')}"></div>
-        <div class="field" style="flex:1"><label>Location</label><input name="location" value="${esc(p.location||'')}"></div></div>
+        <div class="field" style="flex:1"><label>Location</label><input name="location" list="admLocOptions" value="${esc(p.location||'')}"><datalist id="admLocOptions">${(CFG.LOCATIONS||[]).map(l=>`<option value="${esc(l)}"></option>`).join('')}</datalist></div></div>
       <div class="field"><label>Summary</label><textarea name="summary" rows="2">${esc(p.summary||'')}</textarea></div>
       <div class="field"><label>Photos <span class="tiny muted">— add or take a picture (up to 8); remove a photo to replace it. First photo is the cover.</span></label>
         <label class="photo-drop"><input type="file" accept="image/*,.heic,.heif" multiple onchange="ADMIN.addPhotos(this)"><span class="pd-inner">📷 Add photos or take a picture</span></label>
@@ -314,7 +332,7 @@
 
   function closeModal(){ $('#modal').classList.remove('show'); }
   window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
-    addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset};
+    addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps};
 
   renderGate();
   // auto-resume
