@@ -86,7 +86,8 @@ window.CODEV = (function () {
     milestones: Array.isArray(r.milestones) ? r.milestones : [], payments: Array.isArray(r.payments) ? r.payments : [],
     images: Array.isArray(r.images) ? r.images : [] });
   const toAcc = (r) => ({ id: r.id, name: r.name, email: r.email, role: r.role, status: r.status, createdAt: r.created_at,
-    permissions: Array.isArray(r.permissions) ? r.permissions : [] });
+    permissions: Array.isArray(r.permissions) ? r.permissions : [],
+    about: r.about || '', website: r.website || '', phone: r.phone || '', brochure: r.brochure || '' });
 
   // ================= SUPABASE MODE =================
   async function fetchProfile(id) { const r = await sb('/rest/v1/profiles?id=eq.' + id + '&select=*'); return r && r[0] ? toAcc(r[0]) : null; }
@@ -169,7 +170,24 @@ window.CODEV = (function () {
         return sb('/auth/v1/signup', { method: 'POST', anon: true, body: { email, password, data: { name, role } } });
       },
       async update(id, patch) { return sb('/rest/v1/profiles?id=eq.' + id, { method: 'PATCH', body: patch, prefer: 'return=representation' }); },
+      // Signed-in user edits their OWN profile (developer profile & brochure). A DB guard trigger
+      // stops non-admins from changing role/status/permissions, so only safe fields take effect.
+      async updateMine(patch) { const s = getSession(); if (!s) throw new Error('Not signed in');
+        const row = {}; ['name', 'about', 'website', 'phone', 'brochure'].forEach(k => { if (k in patch) row[k] = patch[k]; });
+        const r = await sb('/rest/v1/profiles?id=eq.' + s.user.id, { method: 'PATCH', body: row, prefer: 'return=representation' });
+        try { const p = await fetchProfile(s.user.id); if (p) { s.profile = p; setSession(s); } } catch {}
+        return r; },
       async remove(id) { return sb('/rest/v1/profiles?id=eq.' + id, { method: 'DELETE' }); },
+    },
+    interests: {
+      // A signed-in member registers interest in a verified development. RLS lets a user insert
+      // their own interest; a trigger emails admin (+ developer) — see EXPRESS-INTEREST.sql.
+      async add({ propertyId, propertyTitle, developer, message }) { const s = getSession();
+        const row = { property_id: propertyId, property_title: propertyTitle || null, developer: developer || null,
+          message: message || null, user_id: s.user.id, user_email: s.user.email,
+          user_name: (s.profile && s.profile.name) || s.user.email };
+        return sb('/rest/v1/interests', { method: 'POST', body: row, prefer: 'return=representation' }); },
+      async listAll() { return sb('/rest/v1/interests?order=created_at.desc&select=*'); },
     },
   };
 
@@ -214,7 +232,12 @@ window.CODEV = (function () {
       async byId(id) { return rd(L.acc, []).find(a => a.id === id); },
       async add({ name, email, role, password }) { const list = rd(L.acc, []); if (list.some(a => a.email.toLowerCase() === email.toLowerCase())) throw new Error('Email exists'); const a = { id: uid(), name, email, role, status: 'active', pass: H(password || 'changeme'), createdAt: nowISO() }; list.push(a); wr(L.acc, list); return a; },
       async update(id, patch) { const list = rd(L.acc, []); const i = list.findIndex(a => a.id === id); if (i < 0) return; list[i] = { ...list[i], ...patch }; wr(L.acc, list); return list[i]; },
+      async updateMine(patch) { const s = rd(L.sess, null); if (!s) throw new Error('Not signed in'); const safe = {}; ['name', 'about', 'website', 'phone', 'brochure'].forEach(k => { if (k in patch) safe[k] = patch[k]; }); const list = rd(L.acc, []); const i = list.findIndex(a => a.id === s.id); if (i >= 0) { list[i] = { ...list[i], ...safe }; wr(L.acc, list); } if (safe.name) { s.name = safe.name; wr(L.sess, s); } return list[i]; },
       async remove(id) { wr(L.acc, rd(L.acc, []).filter(a => a.id !== id)); },
+    },
+    interests: {
+      async add(rec) { const list = rd('codev_interests', []); const s = rd(L.sess, null); const r = { id: uid(), createdAt: nowISO(), user_email: s && s.email, user_name: s && s.name, ...rec }; list.unshift(r); wr('codev_interests', list); return r; },
+      async listAll() { return rd('codev_interests', []); },
     },
   };
 
