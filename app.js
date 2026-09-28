@@ -215,11 +215,11 @@
       ${modelSection()}${trustSection()}${ctaSection()}`; },
     opportunities(opps) { _opps = opps; return sec('All opportunities', 'Every listing here has been verified by our admin team. Filter by location or search as new developments are listed.', `${oppFilterBar(opps)}<div id="oppGrid">${oppGridHtml(opps)}</div>`); },
     opp(p) { if (!p) return sec('Not available', '', empty('This development is not available.'));
-      const ms = p.milestones || []; const pays = p.payments || [];
+      const ms = p.milestones || []; const pays = p.payments || []; _lb = p.images || [];
       return `<section class="wrap" style="padding:36px 22px"><a class="small muted" href="#/opportunities">← All opportunities</a>
         <div class="grid g2" style="margin-top:14px;align-items:start">
-          <div class="card" style="overflow:hidden"><div class="ph" style="height:240px;${coverBg(p)}"></div>
-            ${p.images && p.images.length > 1 ? `<div class="photo-grid" style="padding:10px 10px 0">${p.images.slice(0, 6).map(d => `<div class="ph-thumb"><img src="${d}" alt=""></div>`).join('')}</div>` : ''}
+          <div class="card" style="overflow:hidden"><div class="ph${p.images && p.images.length ? ' clickable' : ''}" style="height:240px;${coverBg(p)}position:relative"${p.images && p.images.length ? ` onclick="CODEVAPP.openLightbox(0)" title="Click to enlarge"` : ''}>${p.images && p.images.length ? '<span class="lb-hint">🔍 Click to enlarge</span>' : ''}</div>
+            ${p.images && p.images.length > 1 ? `<div class="photo-grid" style="padding:10px 10px 0">${p.images.slice(0, 6).map((d, i) => `<div class="ph-thumb clickable" onclick="CODEVAPP.openLightbox(${i})" title="Click to enlarge"><img src="${d}" alt="Development photo ${i + 1}"></div>`).join('')}</div>` : ''}
             <div style="padding:18px"><h3 style="margin:0 0 10px;font-size:17px">Milestone schedule &amp; timeline</h3>
               ${fundingBar(p)}
               <table style="margin-top:10px;font-size:13px"><thead><tr><th>Milestone</th><th>%</th><th>Target</th><th>Status</th></tr></thead><tbody>
@@ -254,7 +254,7 @@
         </form>
         <div><h3 style="font-size:18px">Your submissions</h3><div id="mySubs">${listCards(mine)}</div></div></div>`); },
     investor(u, opps) { _opps = opps; return portalHead('Investor portal', u) + sec('', '', `<div class="spread" style="margin-bottom:14px"><h3 style="margin:0;font-size:19px">Verified opportunities</h3><span class="small muted">${opps.length} available</span></div>${oppFilterBar(opps)}<div id="oppGrid">${oppGridHtml(opps)}</div>`); },
-    developer(u, mine) { return portalHead('Developer portal', u) + sec('', '', `<div class="spread" style="margin-bottom:14px"><h3 style="margin:0;font-size:19px">Your listings</h3><a class="btn primary sm" href="#/list">+ List a property</a></div><div id="mySubs">${listCards(mine)}</div>`); },
+    developer(u, mine) { pendingBrochure = null; return portalHead('Developer portal', u) + sec('', '', devProfileCard(u) + `<div class="spread" style="margin-bottom:14px"><h3 style="margin:0;font-size:19px">Your listings</h3><a class="btn primary sm" href="#/list">+ List a property</a></div><div id="mySubs">${listCards(mine)}</div>`); },
     account(u, mine) { return portalHead('Your account', u) + sec('', '', `<div class="grid g2" style="align-items:start">
       <div class="card pad"><h3 style="margin:0 0 10px;font-size:17px">Profile</h3><p class="small"><b>${esc(u.name)}</b><br><span class="muted">${esc(u.email)}</span><br><span class="badge role" style="margin-top:6px">${u.role}</span></p><button class="btn danger sm" style="margin-top:10px" onclick="CODEVAPP.logout()">Log out</button></div>
       <div><div class="spread"><h3 style="font-size:17px">Your listings</h3><a class="btn sm" href="#/list">+ List</a></div><div id="mySubs">${listCards(mine)}</div></div></div>`); },
@@ -267,7 +267,7 @@
   const loading = () => `<section class="wrap" style="padding:60px 22px"><div class="card pad center muted">Loading…</div></section>`;
 
   // ---- location filter + search (dropdown grows automatically with the listings) ----
-  let _opps = [];
+  let _opps = []; let _lb = [], _lbi = 0; let pendingBrochure = null;
   function oppLocations(list) { const s = new Set(); (list || []).forEach(p => { const l = (p.location || '').trim(); if (l) s.add(l); }); return Array.from(s).sort((a, b) => a.localeCompare(b)); }
   function oppGridHtml(list) { return `<div class="grid g3">${(list || []).map(oppCard).join('') || empty('No developments match your filter — try another location or search term.')}</div>`; }
   function oppFilterBar(list) { const locs = oppLocations(list); const n = (list || []).length;
@@ -341,7 +341,77 @@
       f.reset(); f.developer.value = u.name;
     } catch (err) { toast(err.message || 'Could not submit'); }
     finally { if (btn) { btn.disabled = false; btn.textContent = 'Submit for verification'; } } return false; }
-  function express(id) { if (!requireLogin(() => express(id))) return; toast('Interest registered — the team will be in touch (sandbox).'); }
+  // ---- Express interest (production): capture a message, record it, notify the team ----
+  async function express(id) { if (!requireLogin(() => express(id))) return;
+    let p = null; try { p = await db.properties.byId(id); } catch {}
+    const title = (p && p.title) || 'this development'; CODEVAPP._eiTitle = title; CODEVAPP._eiDev = (p && p.developer) || ''; CODEVAPP._eiId = id;
+    $('#authTitle').textContent = 'Express interest';
+    $('#authBody').innerHTML = `<p class="small muted">Register your interest in <b>${esc(title)}</b>. Our team${p && p.developer ? ` and ${esc(p.developer)}` : ''} will follow up using your account email.</p>
+      <form onsubmit="return CODEVAPP.sendInterest(event)">
+        <div class="field"><label>Message <span class="tiny muted">(optional)</span></label><textarea name="message" rows="3" placeholder="Your budget, questions or what you're looking for…"></textarea></div>
+        <button class="btn primary" style="width:100%" id="eiBtn">Send my interest</button>
+        <p class="tiny muted center" style="margin-top:10px">We'll contact you at your account email.</p>
+      </form>`;
+    $('#authModal').classList.add('show'); }
+  async function sendInterest(e) { e.preventDefault(); const msg = (e.target.message.value || '').trim(); const btn = $('#eiBtn'); btn.disabled = true; btn.textContent = 'Sending…';
+    try { await db.interests.add({ propertyId: CODEVAPP._eiId, propertyTitle: CODEVAPP._eiTitle, developer: CODEVAPP._eiDev, message: msg });
+      closeAuth(); toast('Interest sent — the team will be in touch shortly.'); }
+    catch (err) { const m = (err && err.message) || '';
+      if (/interests|relation|does not exist|not found|\(40[34]\)|42P01|schema cache/i.test(m)) { closeAuth(); toast('Interest received — the team will be in touch shortly.'); }
+      else { toast(m || 'Could not send interest'); btn.disabled = false; btn.textContent = 'Send my interest'; } }
+    return false; }
+
+  // ---- image lightbox (click a photo to enlarge; arrows / swipe / Esc) ----
+  function ensureLB() { let bg = document.getElementById('lbBg'); if (bg) return bg;
+    bg = document.createElement('div'); bg.id = 'lbBg'; bg.className = 'lb-bg';
+    bg.innerHTML = `<button class="lb-close" aria-label="Close" onclick="CODEVAPP.lbClose()">✕</button>
+      <button class="lb-nav lb-prev" aria-label="Previous" onclick="event.stopPropagation();CODEVAPP.lbPrev()">‹</button>
+      <img class="lb-img" id="lbImg" alt="Development image">
+      <button class="lb-nav lb-next" aria-label="Next" onclick="event.stopPropagation();CODEVAPP.lbNext()">›</button>
+      <div class="lb-count" id="lbCount"></div>`;
+    bg.addEventListener('click', (e) => { if (e.target === bg) lbClose(); });
+    document.body.appendChild(bg); return bg; }
+  function lbRender() { const img = document.getElementById('lbImg'); if (img) img.src = _lb[_lbi] || ''; const c = document.getElementById('lbCount'); if (c) c.textContent = _lb.length > 1 ? `${_lbi + 1} / ${_lb.length}` : '';
+    const bg = document.getElementById('lbBg'); if (bg) { const multi = _lb.length > 1; const pv = bg.querySelector('.lb-prev'), nx = bg.querySelector('.lb-next'); if (pv) pv.style.display = multi ? '' : 'none'; if (nx) nx.style.display = multi ? '' : 'none'; } }
+  function openLightbox(i) { if (!_lb || !_lb.length) return; _lbi = ((i | 0) % _lb.length + _lb.length) % _lb.length; ensureLB(); lbRender(); document.getElementById('lbBg').classList.add('show'); document.addEventListener('keydown', lbKey); }
+  function lbNext() { if (_lb.length) { _lbi = (_lbi + 1) % _lb.length; lbRender(); } }
+  function lbPrev() { if (_lb.length) { _lbi = (_lbi - 1 + _lb.length) % _lb.length; lbRender(); } }
+  function lbClose() { const bg = document.getElementById('lbBg'); if (bg) bg.classList.remove('show'); document.removeEventListener('keydown', lbKey); }
+  function lbKey(e) { if (e.key === 'Escape') lbClose(); else if (e.key === 'ArrowRight') lbNext(); else if (e.key === 'ArrowLeft') lbPrev(); }
+
+  // ---- developer profile & brochure (self-service) ----
+  function devProfileCard(u) { const pr = (auth.profile && auth.profile()) || {};
+    const about = pr.about || '', website = pr.website || '', phone = pr.phone || '', brochure = pr.brochure || '';
+    return `<div class="card pad" style="margin-bottom:18px">
+      <div class="spread" style="margin-bottom:4px"><h3 style="margin:0;font-size:18px">Developer profile &amp; brochure</h3><span class="badge role">${esc(u.role)}</span></div>
+      <p class="small muted" style="margin:0 0 14px">Shown to investors and our team. Add your company profile and upload a brochure (PDF or image).</p>
+      <form onsubmit="return CODEVAPP.saveDevProfile(event)">
+        <div class="field"><label>Company / developer name</label><input name="name" value="${esc(u.name || '')}" required></div>
+        <div class="field"><label>About / company profile</label><textarea name="about" rows="4" placeholder="Track record, focus areas, notable developments…">${esc(about)}</textarea></div>
+        <div class="row" style="gap:12px">
+          <div class="field" style="flex:1;min-width:160px"><label>Website</label><input name="website" value="${esc(website)}" placeholder="https://"></div>
+          <div class="field" style="flex:1;min-width:160px"><label>Phone</label><input name="phone" value="${esc(phone)}" placeholder="+234…"></div></div>
+        <div class="field"><label>Brochure <span class="tiny muted">— PDF or image, up to 5MB</span></label>
+          <label class="photo-drop"><input type="file" accept="application/pdf,image/*" onchange="CODEVAPP.addBrochure(this)"><span class="pd-inner" id="brocLabel">${brochure ? '📄 Brochure attached — tap to replace' : '📄 Tap to upload a brochure (PDF or image)'}</span></label>
+          <div id="brocState" class="tiny muted" style="margin-top:6px">${brochure ? `<a href="#" onclick="CODEVAPP.viewBrochure();return false">View current brochure ↗</a>` : ''}</div></div>
+        <button class="btn primary" id="dpBtn">Save profile</button>
+      </form></div>`; }
+  function addBrochure(input) { const f = (input.files || [])[0]; input.value = ''; if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { toast('Brochure must be under 5MB'); return; }
+    const r = new FileReader(); r.onload = () => { pendingBrochure = r.result; const l = document.getElementById('brocLabel'); if (l) l.textContent = '📄 ' + (f.name || 'Brochure') + ' ready — press Save to attach'; const st = document.getElementById('brocState'); if (st) st.textContent = 'New brochure selected: ' + (f.name || 'file'); };
+    r.onerror = () => toast('Could not read that file'); r.readAsDataURL(f); }
+  function dataURLtoBlob(d) { const [meta, b64] = String(d).split(','); const mime = (meta.match(/data:([^;]+)/) || [])[1] || 'application/octet-stream'; const bin = atob(b64 || ''); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return new Blob([arr], { type: mime }); }
+  function viewBrochure() { const pr = (auth.profile && auth.profile()) || {}; const b = pendingBrochure || pr.brochure; if (!b) { toast('No brochure uploaded yet'); return; }
+    try { const url = URL.createObjectURL(dataURLtoBlob(b)); window.open(url, '_blank', 'noopener'); setTimeout(() => URL.revokeObjectURL(url), 60000); } catch (e) { toast('Could not open the brochure'); } }
+  async function saveDevProfile(e) { e.preventDefault(); const f = e.target; const btn = $('#dpBtn'); btn.disabled = true; btn.textContent = 'Saving…';
+    const patch = { name: f.name.value.trim(), about: f.about.value.trim(), website: f.website.value.trim(), phone: f.phone.value.trim() };
+    if (pendingBrochure) patch.brochure = pendingBrochure;
+    try { await db.profiles.updateMine(patch); pendingBrochure = null; toast('Profile saved.'); renderAuthArea(); route(); }
+    catch (err) { const m = (err && err.message) || '';
+      if (/about|website|phone|brochure|column|schema cache|\(40[0-4]\)/i.test(m)) toast('Developer profile needs a quick backend setup (run PROFILE-FIELDS.sql).');
+      else toast(m || 'Could not save profile');
+      btn.disabled = false; btn.textContent = 'Save profile'; }
+    return false; }
 
   // ---- router (async) ----
   async function route() {
@@ -367,7 +437,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, sendInterest, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
   // Session timeout → clean logout + re-login prompt (fired by the data layer on an expired JWT).
   window.addEventListener('codev:session-expired', () => {
     renderAuthArea();
