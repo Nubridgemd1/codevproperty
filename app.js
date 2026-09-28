@@ -368,6 +368,14 @@
   }
 
   window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, _afterAuth: null };
+  // Session timeout → clean logout + re-login prompt (fired by the data layer on an expired JWT).
+  window.addEventListener('codev:session-expired', () => {
+    renderAuthArea();
+    const p = (location.hash || '#/').slice(2).split('/')[0];
+    if (['list', 'investor', 'developer', 'account'].includes(p)) location.hash = '#/';
+    openAuth('signin');
+    toast('Your session timed out — please sign in again.');
+  });
   window.addEventListener('hashchange', route);
   document.addEventListener('DOMContentLoaded', () => { renderAuthArea(); route(); });
   renderAuthArea(); route();
