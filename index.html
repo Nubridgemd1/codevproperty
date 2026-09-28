@@ -34,7 +34,6 @@
       <a class="tiny" href="#/investor">Investor portal</a>
       <a class="tiny" href="#/developer">Developer portal</a>
       <a class="tiny" href="#/list">Property owner / visitor</a>
-      <a class="tiny" href="admin.html">Admin console ↗</a>
     </div>
   </div>
 </header>
@@ -50,7 +49,7 @@
     <div><h4 class="foot-h">Platform</h4>
       <a class="foot-l" href="#/opportunities">Opportunities</a><a class="foot-l" href="#/how">How it works</a><a class="foot-l" href="#/list">List a property</a></div>
     <div><h4 class="foot-h">Access</h4>
-      <a class="foot-l" href="#/investor">Investor</a><a class="foot-l" href="#/developer">Developer</a><a class="foot-l" href="#/list">Property owner</a><a class="foot-l" href="admin.html">Admin console ↗</a></div>
+      <a class="foot-l" href="#/investor">Investor</a><a class="foot-l" href="#/developer">Developer</a><a class="foot-l" href="#/list">Property owner</a></div>
     <div><h4 class="foot-h">Markets</h4>
       <span class="foot-l muted">Ikoyi · Victoria Island</span><span class="foot-l muted">Lekki · Ikeja GRA</span><span class="foot-l muted">Nigeria</span></div>
   </div>
@@ -85,9 +84,13 @@
 .foot-h{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink2);margin:0 0 10px}
 .foot-l{display:block;font-size:13.5px;color:var(--ink);margin-bottom:6px}.foot-l:hover{color:var(--bronze)}
 .hero{background:linear-gradient(160deg,#fff, var(--cream));border-bottom:1px solid var(--line)}
-.opp-card .ph{height:120px;background:linear-gradient(135deg,var(--navy),var(--navy2));border-radius:12px 12px 0 0;position:relative}
-.opp-card .ph .loc{position:absolute;left:12px;bottom:10px;color:#fff;font-size:12px;font-weight:600}
-.opp-card .ph .vb{position:absolute;right:10px;top:10px}
+.opp-card .ph{height:120px;background:linear-gradient(135deg,var(--navy),var(--navy2));border-radius:12px 12px 0 0;position:relative;overflow:hidden}
+/* readability scrim behind the on-image caption — dark by default, light when the photo is bright */
+.opp-card .ph:after{content:"";position:absolute;left:0;right:0;bottom:0;height:60%;background:linear-gradient(to top,rgba(15,34,51,.62),rgba(15,34,51,0));pointer-events:none;z-index:1}
+.opp-card .ph.cover-light:after{background:linear-gradient(to top,rgba(255,255,255,.82),rgba(255,255,255,0))}
+.opp-card .ph .loc{position:absolute;left:10px;bottom:9px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:20px;z-index:2;color:#fff;background:rgba(15,34,51,.5)}
+.opp-card .ph.cover-light .loc{color:var(--navy);background:rgba(255,255,255,.78)}
+.opp-card .ph .vb{position:absolute;right:10px;top:10px;z-index:2}
 .step-n{width:30px;height:30px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none}
 </style>
 

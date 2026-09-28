@@ -22,6 +22,10 @@
   .stat .n{font-family:'Fraunces',serif;font-size:26px;color:var(--navy)}.stat .l{font-size:12px;color:var(--ink2);margin-top:2px}
   .gate{max-width:420px;margin:8vh auto;padding:28px}
   .subrow td{padding:6px 8px}.subrow input,.subrow select{padding:6px 8px;font-size:13px}
+  .ph-thumb.is-cover{outline:2px solid var(--bronze);outline-offset:-1px}
+  .ph-thumb .cover-badge{position:absolute;top:4px;left:4px;background:var(--bronze);color:#fff;font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:20px;z-index:2}
+  .ph-thumb .mkcover{position:absolute;top:4px;left:4px;right:auto;width:22px;height:22px;border-radius:50%;border:none;background:rgba(15,34,51,.72);color:#fff;font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;z-index:2}
+  .ph-thumb .mkcover:hover{background:var(--bronze)}
 </style>
 </head>
 <body>
@@ -30,7 +34,7 @@
 
 <div id="console" class="hide">
   <div class="adminbar"><div class="wrap spread" style="padding:14px 22px">
-    <div class="brand"><span class="logo">C</span><span><b>CoDev</b><small>Admin Console</small></span></div>
+    <div class="brand" style="gap:0"><span style="font-family:'Fraunces',Georgia,serif;font-size:18px;line-height:1;color:#fff"><b style="display:inline;font-weight:700">CoDev</b> <span style="font-weight:500;color:#c6d2de">Admin Console</span></span></div>
     <div class="row" style="gap:8px"><span class="badge role" id="who"></span><a class="btn ghost sm" style="color:#cfdbe6" href="index.html" target="_blank">View site ↗</a><button class="btn sm" onclick="ADMIN.lock()">Lock</button></div>
   </div></div>
   <div class="wrap" style="padding:24px 22px">
@@ -65,7 +69,7 @@
 
   // ---------- gate ----------
   function renderGate(){
-    $('#gate').innerHTML = `<div class="brand" style="justify-content:center;margin-bottom:14px"><span class="logo" style="border-color:var(--bronze)">C</span><span><b>CoDev</b><small>Admin Console</small></span></div>
+    $('#gate').innerHTML = `<div class="brand" style="justify-content:center;gap:0;margin-bottom:14px"><span style="font-family:'Fraunces',Georgia,serif;font-size:20px;line-height:1;color:var(--navy)"><b style="display:inline;font-weight:700">CoDev</b> <span style="font-weight:500;color:var(--ink2)">Admin Console</span></span></div>
       <p class="small muted center">${CFG.configured?'Sign in with your admin account.':'Enter the admin passcode.'}</p>
       <form onsubmit="return ADMIN.login(event)" style="margin-top:14px">
         ${CFG.configured?`<div class="field"><label>Admin email</label><input id="aEmail" type="email" required autofocus placeholder="admin@codevproperty.com"></div>
@@ -76,7 +80,7 @@
         <p class="tiny muted center" style="margin-top:6px">${CFG.configured?'Real authentication via Supabase. Only accounts with the admin role may enter.':'Demo passcode: <b>admin2026</b>'}</p>
       </form>`;
   }
-  const gateHead = `<div class="brand" style="justify-content:center;margin-bottom:14px"><span class="logo" style="border-color:var(--bronze)">C</span><span><b>CoDev</b><small>Admin Console</small></span></div>`;
+  const gateHead = `<div class="brand" style="justify-content:center;gap:0;margin-bottom:14px"><span style="font-family:'Fraunces',Georgia,serif;font-size:20px;line-height:1;color:var(--navy)"><b style="display:inline;font-weight:700">CoDev</b> <span style="font-weight:500;color:var(--ink2)">Admin Console</span></span></div>`;
   function backToLogin(){ renderGate(); }
   function forgot(){ $('#gate').innerHTML = gateHead + `<form onsubmit="return ADMIN.forgotSend(event)" style="margin-top:8px">
       <p class="small muted center" style="margin:0 0 10px">Enter your admin email to get a 6-digit reset code.</p>
@@ -180,7 +184,7 @@
       <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Developer / owner</label><input name="developer" value="${esc(p.developer||'')}"></div>
         <div class="field" style="flex:1"><label>Location</label><input name="location" list="admLocOptions" value="${esc(p.location||'')}"><datalist id="admLocOptions">${(CFG.LOCATIONS||[]).map(l=>`<option value="${esc(l)}"></option>`).join('')}</datalist></div></div>
       <div class="field"><label>Summary</label><textarea name="summary" rows="2">${esc(p.summary||'')}</textarea></div>
-      <div class="field"><label>Photos <span class="tiny muted">— add or take a picture (up to 8); remove a photo to replace it. First photo is the cover.</span></label>
+      <div class="field"><label>Photos <span class="tiny muted">— add or take a picture (up to 8). The <b>Cover</b> photo is what shows on the listing card; tap ★ on any photo to make it the cover.</span></label>
         <label class="photo-drop"><input type="file" accept="image/*,.heic,.heif" multiple onchange="ADMIN.addPhotos(this)"><span class="pd-inner">📷 Add photos or take a picture</span></label>
         <div id="imgRows" class="photo-grid"></div></div>
       <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Participation from (₦)</label><input name="priceFrom" type="number" value="${p.priceFrom||0}"></div>
@@ -197,8 +201,9 @@
     renderMs(); renderPay(); renderImgs(); $('#modal').classList.add('show');
   }
   const MAX_IMGS=8;
-  function renderImgs(){ const box=$('#imgRows'); if(!box) return; box.innerHTML=EDIT.images.map((d,i)=>`<div class="ph-thumb"><img src="${d}" alt="photo ${i+1}"><button type="button" aria-label="Remove photo" onclick="ADMIN.delImg(${i})">✕</button></div>`).join(''); }
+  function renderImgs(){ const box=$('#imgRows'); if(!box) return; box.innerHTML=EDIT.images.map((d,i)=>`<div class="ph-thumb${i===0?' is-cover':''}"><img src="${d}" alt="photo ${i+1}">${i===0?'<span class="cover-badge">Cover</span>':`<button type="button" class="mkcover" title="Make cover photo" aria-label="Make cover photo" onclick="ADMIN.makeCover(${i})">★</button>`}<button type="button" class="rmimg" aria-label="Remove photo" onclick="ADMIN.delImg(${i})">✕</button></div>`).join(''); }
   function delImg(i){ EDIT.images.splice(i,1); renderImgs(); }
+  function makeCover(i){ if(i>0 && i<EDIT.images.length){ const img=EDIT.images.splice(i,1)[0]; EDIT.images.unshift(img); renderImgs(); } }
   function compressImg(file,maxDim,quality){ maxDim=maxDim||1500; quality=quality||0.72; return new Promise((resolve)=>{
     const isImg=(file&&file.type&&file.type.indexOf('image/')===0)||/\.(jpe?g|png|webp|heic|heif)$/i.test((file&&file.name)||''); if(!isImg){resolve(null);return;}
     const reader=new FileReader(); reader.onload=()=>{ const img=new Image();
@@ -335,7 +340,7 @@
   async function delAcc(id){ const a=ACCS.find(x=>x.id===id); if(confirm('Delete account "'+(a.name||a.email)+'"?')){ try{ await db.profiles.remove(id); toast('Account deleted'); await load(); }catch(err){toast(err.message);} } }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
     addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps};
 
   // Session timeout in the admin console → message, then back to the sign-in gate.

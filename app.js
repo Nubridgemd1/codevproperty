@@ -159,7 +159,7 @@
   // ---- pieces ----
   function coverBg(p) { return (p.images && p.images[0]) ? `background-image:url('${p.images[0]}');background-size:cover;background-position:center;` : ''; }
   function oppCard(p) { return `<div class="card opp-card">
-    <div class="ph" style="${coverBg(p)}"><span class="vb badge verified">✓ Verified</span><span class="loc">📍 ${esc(p.location)}</span></div>
+    <div class="ph"${p.images && p.images[0] ? ' data-cover="1"' : ''} style="${coverBg(p)}"><span class="vb badge verified">✓ Verified</span><span class="loc">📍 ${esc(p.location)}</span></div>
     <div style="padding:16px"><div class="small muted" style="font-weight:600">${esc(p.developer)}</div>
       <h3 style="margin:2px 0 6px;font-size:19px">${esc(p.title)}</h3>
       <p class="small muted" style="min-height:38px">${esc(p.summary)}</p>
@@ -270,6 +270,25 @@
   let _opps = []; let _lb = [], _lbi = 0; let pendingBrochure = null;
   function oppLocations(list) { const s = new Set(); (list || []).forEach(p => { const l = (p.location || '').trim(); if (l) s.add(l); }); return Array.from(s).sort((a, b) => a.localeCompare(b)); }
   function oppGridHtml(list) { return `<div class="grid g3">${(list || []).map(oppCard).join('') || empty('No developments match your filter — try another location or search term.')}</div>`; }
+  // Make on-image captions readable on ANY photo: sample the caption area's brightness and
+  // pick dark text on a light photo, light text on a dark one (with a matching scrim).
+  function setCoverTheme(ph, mode) { ph.classList.toggle('cover-light', mode === 'light'); ph.classList.toggle('cover-dark', mode === 'dark'); }
+  function adaptCovers(root) {
+    (root || document).querySelectorAll('.opp-card .ph[data-cover]').forEach(function (ph) {
+      const m = (ph.style.backgroundImage || '').match(/url\(["']?(.*?)["']?\)/); if (!m) return;
+      const img = new Image();
+      img.onload = function () {
+        try { const c = document.createElement('canvas'); const w = c.width = 24, h = c.height = 24;
+          const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+          const d = ctx.getImageData(0, Math.floor(h * 0.6), w, Math.ceil(h * 0.4)).data;
+          let sum = 0, n = 0; for (let i = 0; i < d.length; i += 4) { sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; n++; }
+          setCoverTheme(ph, (sum / n) > 150 ? 'light' : 'dark');
+        } catch (e) { setCoverTheme(ph, 'dark'); }   // cross-origin photo can't be sampled → safe dark scrim + white text
+      };
+      img.onerror = function () { setCoverTheme(ph, 'dark'); };
+      img.crossOrigin = 'anonymous'; img.src = m[1];
+    });
+  }
   function oppFilterBar(list) { const locs = oppLocations(list); const n = (list || []).length;
     return `<div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:20px">
       <div class="field" style="margin:0;min-width:210px"><select id="oppLoc" onchange="CODEVAPP.filterOpps()" aria-label="Filter by location"><option value="">📍 All locations</option>${locs.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('')}</select></div>
@@ -284,6 +303,7 @@
     if (q) list = list.filter(p => [p.title, p.developer, p.location, p.summary, p.stage].some(x => (x || '').toLowerCase().includes(q)));
     const g = document.getElementById('oppGrid'); if (g) g.innerHTML = oppGridHtml(list);
     const c = document.getElementById('oppCount'); if (c) c.textContent = `${list.length} of ${(_opps || []).length} development${(_opps || []).length === 1 ? '' : 's'}`;
+    adaptCovers();
   }
 
   // ---- actions ----
@@ -434,6 +454,7 @@
       else if (path === 'account') app.innerHTML = V.account(u, await db.properties.listMine());
       else { const opps = await db.properties.listPublic(); app.innerHTML = V.home(opps, { opps: opps.length, devs: '—', investors: '—' }); }
     } catch (err) { app.innerHTML = sec('Something went wrong', err.message || 'Please try again.', ''); }
+    adaptCovers();
     window.scrollTo(0, 0);
   }
 
