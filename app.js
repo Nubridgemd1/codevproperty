@@ -213,7 +213,7 @@
         <div class="grid g3">${opps.slice(0, 3).map(oppCard).join('') || empty('No verified opportunities yet.')}</div>
         <div class="center" style="margin-top:24px"><a class="btn" href="#/opportunities">View all opportunities →</a></div></section>
       ${modelSection()}${trustSection()}${ctaSection()}`; },
-    opportunities(opps) { return sec('All opportunities', 'Every listing here has been verified by our admin team.', `<div class="grid g3">${opps.map(oppCard).join('') || empty('No verified opportunities yet — check back soon.')}</div>`); },
+    opportunities(opps) { _opps = opps; return sec('All opportunities', 'Every listing here has been verified by our admin team. Filter by location or search as new developments are listed.', `${oppFilterBar(opps)}<div id="oppGrid">${oppGridHtml(opps)}</div>`); },
     opp(p) { if (!p) return sec('Not available', '', empty('This development is not available.'));
       const ms = p.milestones || []; const pays = p.payments || [];
       return `<section class="wrap" style="padding:36px 22px"><a class="small muted" href="#/opportunities">← All opportunities</a>
@@ -240,7 +240,9 @@
         <form class="card pad" onsubmit="return CODEVAPP.submitProperty(event)">
           <div class="field"><label>Property / development title</label><input name="title" required></div>
           <div class="field"><label>Developer / owner name</label><input name="developer" value="${esc(u.name)}" required></div>
-          <div class="field"><label>Location</label><input name="location" placeholder="e.g. Lekki, Lagos" required></div>
+          <div class="field"><label>Location</label><input name="location" list="locOptions" placeholder="e.g. Lagos - Lekki" required autocomplete="off">
+            <datalist id="locOptions">${(CFG.LOCATIONS || []).map(l => `<option value="${esc(l)}"></option>`).join('')}</datalist>
+            <span class="tiny muted">Pick a suggestion or type a new area — it becomes filterable for buyers.</span></div>
           <div class="field"><label>Summary</label><textarea name="summary" rows="3" required></textarea></div>
           <div class="field"><label>Photos <span class="tiny muted">— up to ${MAX_PHOTOS}, from your phone or computer</span></label>
             <label class="photo-drop"><input type="file" accept="image/*,.heic,.heif" multiple onchange="CODEVAPP.addPhotos(this)"><span class="pd-inner">📷 Tap to add photos or take a picture</span></label>
@@ -251,7 +253,7 @@
           <p class="tiny muted center" style="margin-top:8px">A default milestone schedule is attached — admin can refine timelines &amp; payments.</p>
         </form>
         <div><h3 style="font-size:18px">Your submissions</h3><div id="mySubs">${listCards(mine)}</div></div></div>`); },
-    investor(u, opps) { return portalHead('Investor portal', u) + sec('', '', `<div class="spread" style="margin-bottom:14px"><h3 style="margin:0;font-size:19px">Verified opportunities</h3><span class="small muted">${opps.length} available</span></div><div class="grid g3">${opps.map(oppCard).join('') || empty('No verified opportunities yet.')}</div>`); },
+    investor(u, opps) { _opps = opps; return portalHead('Investor portal', u) + sec('', '', `<div class="spread" style="margin-bottom:14px"><h3 style="margin:0;font-size:19px">Verified opportunities</h3><span class="small muted">${opps.length} available</span></div>${oppFilterBar(opps)}<div id="oppGrid">${oppGridHtml(opps)}</div>`); },
     developer(u, mine) { return portalHead('Developer portal', u) + sec('', '', `<div class="spread" style="margin-bottom:14px"><h3 style="margin:0;font-size:19px">Your listings</h3><a class="btn primary sm" href="#/list">+ List a property</a></div><div id="mySubs">${listCards(mine)}</div>`); },
     account(u, mine) { return portalHead('Your account', u) + sec('', '', `<div class="grid g2" style="align-items:start">
       <div class="card pad"><h3 style="margin:0 0 10px;font-size:17px">Profile</h3><p class="small"><b>${esc(u.name)}</b><br><span class="muted">${esc(u.email)}</span><br><span class="badge role" style="margin-top:6px">${u.role}</span></p><button class="btn danger sm" style="margin-top:10px" onclick="CODEVAPP.logout()">Log out</button></div>
@@ -263,6 +265,26 @@
   function sec(t, sub, body) { return `<section class="wrap" style="padding:${t ? '40' : '24'}px 22px">${t ? `<span class="eyebrow">CoDev</span><h2 style="margin:4px 0 ${sub ? '4' : '18'}px;font-size:27px">${t}</h2>` : ''}${sub ? `<p class="muted" style="margin:0 0 22px;max-width:60ch">${sub}</p>` : ''}${body}</section>`; }
   const empty = (m) => `<div class="card pad center muted" style="grid-column:1/-1">${m}</div>`;
   const loading = () => `<section class="wrap" style="padding:60px 22px"><div class="card pad center muted">Loading…</div></section>`;
+
+  // ---- location filter + search (dropdown grows automatically with the listings) ----
+  let _opps = [];
+  function oppLocations(list) { const s = new Set(); (list || []).forEach(p => { const l = (p.location || '').trim(); if (l) s.add(l); }); return Array.from(s).sort((a, b) => a.localeCompare(b)); }
+  function oppGridHtml(list) { return `<div class="grid g3">${(list || []).map(oppCard).join('') || empty('No developments match your filter — try another location or search term.')}</div>`; }
+  function oppFilterBar(list) { const locs = oppLocations(list); const n = (list || []).length;
+    return `<div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:20px">
+      <div class="field" style="margin:0;min-width:210px"><select id="oppLoc" onchange="CODEVAPP.filterOpps()" aria-label="Filter by location"><option value="">📍 All locations</option>${locs.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('')}</select></div>
+      <div class="field" style="margin:0;flex:1;min-width:220px"><input id="oppSearch" type="search" placeholder="Search developments, developer or location…" oninput="CODEVAPP.filterOpps()" aria-label="Search developments"></div>
+      <span id="oppCount" class="small muted">${n} development${n === 1 ? '' : 's'}</span>
+    </div>`; }
+  function filterOpps() {
+    const loc = (document.getElementById('oppLoc') || {}).value || '';
+    const q = ((document.getElementById('oppSearch') || {}).value || '').trim().toLowerCase();
+    let list = _opps || [];
+    if (loc) list = list.filter(p => (p.location || '').trim() === loc);
+    if (q) list = list.filter(p => [p.title, p.developer, p.location, p.summary, p.stage].some(x => (x || '').toLowerCase().includes(q)));
+    const g = document.getElementById('oppGrid'); if (g) g.innerHTML = oppGridHtml(list);
+    const c = document.getElementById('oppCount'); if (c) c.textContent = `${list.length} of ${(_opps || []).length} development${(_opps || []).length === 1 ? '' : 's'}`;
+  }
 
   // ---- actions ----
   // ---- listing photos: mobile-friendly capture, HEIC-safe, compressed to data URLs ----
@@ -345,7 +367,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, _afterAuth: null };
   window.addEventListener('hashchange', route);
   document.addEventListener('DOMContentLoaded', () => { renderAuthArea(); route(); });
   renderAuthArea(); route();
