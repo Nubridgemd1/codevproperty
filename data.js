@@ -65,7 +65,17 @@ window.CODEV = (function () {
     if (prefer) headers.Prefer = prefer;
     const res = await fetch(BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
     const txt = await res.text(); let data; try { data = txt ? JSON.parse(txt) : null; } catch { data = txt; }
-    if (!res.ok) throw new Error((data && (data.message || data.error_description || data.msg || data.error)) || ('Request failed (' + res.status + ')'));
+    if (!res.ok) {
+      const emsg = (data && (data.message || data.error_description || data.msg || data.error)) || ('Request failed (' + res.status + ')');
+      // Session timeout: an authenticated user request rejected with 401 (expired/invalid JWT).
+      // Clear the stale session and signal the app to prompt a fresh sign-in — no raw "JWT expired".
+      if (res.status === 401 && tk && !isAuth) {
+        setSession(null);
+        try { window.dispatchEvent(new CustomEvent('codev:session-expired')); } catch (e) {}
+        throw new Error('Your session has expired. Please sign in again.');
+      }
+      throw new Error(emsg);
+    }
     return data;
   }
 
