@@ -1,4 +1,4 @@
-/* CoDevelop — data, auth & store layer.
+/* CoDev — data, auth & store layer.
  * Supabase-backed (real Auth + Postgres + RLS) when configured; localStorage fallback otherwise.
  * All store/auth methods are async (return Promises).
  */
@@ -9,7 +9,7 @@ window.CODEV = (function () {
   const configured = !!(BASE && KEY && KEY.indexOf('sb_') === 0);
 
   const CFG = {
-    brand: 'CoDevelop', tagline: 'Property Co-Development', configured,
+    brand: 'CoDev', tagline: 'Property Co-Development', configured,
     ADMIN_EMAIL: 'admin@codevproperty.com',
     ROLES: ['investor', 'developer', 'visitor'],
     STAGES: ['Land / Commencement', 'Foundation', 'Structural Frame', 'Building Envelope',

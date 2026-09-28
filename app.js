@@ -1,4 +1,4 @@
-/* CoDevelop — public site, auth (Supabase or local), role portals, property submission */
+/* CoDev — public site, auth (Supabase or local), role portals, property submission */
 (function () {
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
   const app = document.getElementById('app');
@@ -74,12 +74,12 @@
         const sent = await startEmailCode(email);                            // verify via emailed code
         if (!sent) {
           // Mailer is down — don't strand the client. The account is already created & auto-confirmed.
-          if (d && d.access_token) { await auth.completeSignup(d); toast('Account created — welcome to CoDevelop!'); await afterAuth(); }
+          if (d && d.access_token) { await auth.completeSignup(d); toast('Account created — welcome to CoDev!'); await afterAuth(); }
           else { toast('Your account was created, but the verification email is temporarily unavailable. Please try Sign in shortly.'); btn.disabled = false; btn.textContent = 'Create account'; }
         }
         return false;
       }
-      await auth.signUp({ name: f.name.value.trim(), email, role: f.role.value, password: f.pass.value }); toast('Welcome to CoDevelop!'); await afterAuth();
+      await auth.signUp({ name: f.name.value.trim(), email, role: f.role.value, password: f.pass.value }); toast('Welcome to CoDev!'); await afterAuth();
     } catch (err) { toast(err.message || 'Sign up failed'); btn.disabled = false; btn.textContent = 'Create account'; } return false; }
 
   // ---- 2FA via emailed code (required for all public accounts) ----
@@ -139,7 +139,7 @@
     return sec(
       blocked ? 'Account not approved' : 'Account pending verification',
       blocked
-        ? 'Your account is not approved for platform access. Please contact the CoDevelop team at info@codevproperty.com if you believe this is a mistake.'
+        ? 'Your account is not approved for platform access. Please contact the CoDev team at info@codevproperty.com if you believe this is a mistake.'
         : 'Thank you for signing up. An administrator is reviewing and verifying your account. As soon as it is approved you will be able to view opportunities, list a development and use the platform — we will email you when you are cleared. You are securely signed in; you can log out from the top right.',
       '');
   }
@@ -260,7 +260,7 @@
   function listCards(mine) { if (!mine || !mine.length) return `<div class="card pad small muted">No submissions yet. <a href="#/list">List a property →</a></div>`;
     return `<div class="grid" style="gap:10px">${mine.map(p => `<div class="card pad spread"><div class="row" style="gap:11px;align-items:center">${p.images && p.images[0] ? `<img src="${p.images[0]}" alt="" style="width:48px;height:48px;border-radius:9px;object-fit:cover;flex:none">` : ''}<div><b>${esc(p.title)}</b><div class="tiny muted">${esc(p.location)} · ${fmtN(p.priceFrom)} · funded ${funded(p)}%</div></div></div><span class="badge ${p.status}">${p.status}</span></div>`).join('')}</div>`; }
   function portalHead(t, u) { return `<section class="hero"><div class="wrap" style="padding:26px 22px"><span class="eyebrow">${u.role} · ${esc(u.email)}</span><h1 style="font-size:28px;margin:6px 0 0">${t}</h1></div></section>`; }
-  function sec(t, sub, body) { return `<section class="wrap" style="padding:${t ? '40' : '24'}px 22px">${t ? `<span class="eyebrow">CoDevelop</span><h2 style="margin:4px 0 ${sub ? '4' : '18'}px;font-size:27px">${t}</h2>` : ''}${sub ? `<p class="muted" style="margin:0 0 22px;max-width:60ch">${sub}</p>` : ''}${body}</section>`; }
+  function sec(t, sub, body) { return `<section class="wrap" style="padding:${t ? '40' : '24'}px 22px">${t ? `<span class="eyebrow">CoDev</span><h2 style="margin:4px 0 ${sub ? '4' : '18'}px;font-size:27px">${t}</h2>` : ''}${sub ? `<p class="muted" style="margin:0 0 22px;max-width:60ch">${sub}</p>` : ''}${body}</section>`; }
   const empty = (m) => `<div class="card pad center muted" style="grid-column:1/-1">${m}</div>`;
   const loading = () => `<section class="wrap" style="padding:60px 22px"><div class="card pad center muted">Loading…</div></section>`;
 

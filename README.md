@@ -1,6 +1,6 @@
-# CoDevelop — Property Co-Development Platform (clean functioning site)
+# CoDev — Property Co-Development Platform (clean functioning site)
 
-A clean, functioning build of the CoDevelop platform (separate from the interactive prototype/demo).
+A clean, functioning build of the CoDev platform (separate from the interactive prototype/demo).
 
 - **Accounts** — visitors create accounts as Investor, Developer or Property owner (sign in/up).
 - **Property listings** — developers **and** visitors (property owners) submit properties.
@@ -14,6 +14,6 @@ structured to swap to **Supabase** (Postgres + Auth + RLS) for real, shared, mul
 
 ## Sandbox
 This is **sandbox mode** — no real capital, KYC or escrow. Real auth+MFA, KYC/AML, bank/escrow and the
-legal/regulatory program are the production go-live build (see the CoDevelop go-live plan PDFs).
+legal/regulatory program are the production go-live build (see the CoDev go-live plan PDFs).
 
 Admin passcode (demo): `admin2026`.
