@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>CoDevelop — Admin Console</title>
+<title>CoDev — Admin Console</title>
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
@@ -26,7 +26,7 @@
 
 <div id="console" class="hide">
   <div class="adminbar"><div class="wrap spread" style="padding:14px 22px">
-    <div class="brand"><span class="logo">C</span><span><b>CoDevelop</b><small>Admin Console</small></span></div>
+    <div class="brand"><span class="logo">C</span><span><b>CoDev</b><small>Admin Console</small></span></div>
     <div class="row" style="gap:8px"><span class="badge role" id="who"></span><a class="btn ghost sm" style="color:#cfdbe6" href="index.html" target="_blank">View site ↗</a><button class="btn sm" onclick="ADMIN.lock()">Lock</button></div>
   </div></div>
   <div class="wrap" style="padding:24px 22px">
@@ -61,7 +61,7 @@
 
   // ---------- gate ----------
   function renderGate(){
-    $('#gate').innerHTML = `<div class="brand" style="justify-content:center;margin-bottom:14px"><span class="logo" style="border-color:var(--bronze)">C</span><span><b>CoDevelop</b><small>Admin Console</small></span></div>
+    $('#gate').innerHTML = `<div class="brand" style="justify-content:center;margin-bottom:14px"><span class="logo" style="border-color:var(--bronze)">C</span><span><b>CoDev</b><small>Admin Console</small></span></div>
       <p class="small muted center">${CFG.configured?'Sign in with your admin account.':'Enter the admin passcode.'}</p>
       <form onsubmit="return ADMIN.login(event)" style="margin-top:14px">
         ${CFG.configured?`<div class="field"><label>Admin email</label><input id="aEmail" type="email" required autofocus placeholder="admin@codevproperty.com"></div>
@@ -72,7 +72,7 @@
         <p class="tiny muted center" style="margin-top:6px">${CFG.configured?'Real authentication via Supabase. Only accounts with the admin role may enter.':'Demo passcode: <b>admin2026</b>'}</p>
       </form>`;
   }
-  const gateHead = `<div class="brand" style="justify-content:center;margin-bottom:14px"><span class="logo" style="border-color:var(--bronze)">C</span><span><b>CoDevelop</b><small>Admin Console</small></span></div>`;
+  const gateHead = `<div class="brand" style="justify-content:center;margin-bottom:14px"><span class="logo" style="border-color:var(--bronze)">C</span><span><b>CoDev</b><small>Admin Console</small></span></div>`;
   function backToLogin(){ renderGate(); }
   function forgot(){ $('#gate').innerHTML = gateHead + `<form onsubmit="return ADMIN.forgotSend(event)" style="margin-top:8px">
       <p class="small muted center" style="margin:0 0 10px">Enter your admin email to get a 6-digit reset code.</p>
