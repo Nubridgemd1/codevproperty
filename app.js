@@ -219,7 +219,7 @@
       return `<section class="wrap" style="padding:36px 22px"><a class="small muted" href="#/opportunities">← All opportunities</a>
         <div class="grid g2" style="margin-top:14px;align-items:start">
           <div class="card" style="overflow:hidden"><div class="ph${p.images && p.images.length ? ' clickable' : ''}" style="height:240px;${coverBg(p)}position:relative"${p.images && p.images.length ? ` onclick="CODEVAPP.openLightbox(0)" title="Click to enlarge"` : ''}>${p.images && p.images.length ? '<span class="lb-hint">🔍 Click to enlarge</span>' : ''}</div>
-            ${p.images && p.images.length > 1 ? `<div class="photo-grid" style="padding:10px 10px 0">${p.images.slice(0, 6).map((d, i) => `<div class="ph-thumb clickable" onclick="CODEVAPP.openLightbox(${i})" title="Click to enlarge"><img src="${d}" alt="Development photo ${i + 1}"></div>`).join('')}</div>` : ''}
+            ${p.images && p.images.length > 1 ? `<div class="photo-grid" style="padding:10px 10px 0">${p.images.map((d, i) => `<div class="ph-thumb clickable" onclick="CODEVAPP.openLightbox(${i})" title="Click to enlarge"><img src="${d}" alt="Development photo ${i + 1}"></div>`).join('')}</div>` : ''}
             <div style="padding:18px"><h3 style="margin:0 0 10px;font-size:17px">Milestone schedule &amp; timeline</h3>
               ${fundingBar(p)}
               <table style="margin-top:10px;font-size:13px"><thead><tr><th>Milestone</th><th>%</th><th>Target</th><th>Status</th></tr></thead><tbody>
