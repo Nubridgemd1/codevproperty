@@ -12,6 +12,14 @@ window.CODEV = (function () {
     brand: 'CoDev', tagline: 'Property Co-Development', configured,
     ADMIN_EMAIL: 'admin@codevproperty.com',
     ROLES: ['investor', 'developer', 'visitor'],
+    // Suggested locations for the List-a-property form (developers can type any location too).
+    // The public "filter by location" dropdown is built from the actual listings, so it grows
+    // automatically as new cities/areas are uploaded.
+    LOCATIONS: ['Lagos - Ikoyi', 'Lagos - Victoria Island', 'Lagos - Lekki', 'Lagos - Lekki Phase 1',
+                'Lagos - Ajah', 'Lagos - Ikeja GRA', 'Lagos - Ikeja', 'Lagos - Yaba', 'Lagos - Magodo',
+                'Lagos - Ogudu', 'Lagos - Gbagada', 'Lagos - Surulere', 'Lagos - Epe', 'Lagos - Ibeju-Lekki',
+                'Abuja - Maitama', 'Abuja - Asokoro', 'Abuja - Wuse 2', 'Abuja - Jabi', 'Abuja - Gwarinpa',
+                'Port Harcourt', 'Ibadan', 'Enugu', 'Abeokuta', 'Kano'],
     STAGES: ['Land / Commencement', 'Foundation', 'Structural Frame', 'Building Envelope',
              'Mechanical & Electrical', 'Finishing', 'Completion / Handover'],
     // Default milestone schedule (name + % of funding released). Admin can edit per development.
