@@ -82,6 +82,7 @@ window.CODEV = (function () {
   // ---- mappers (snake_case DB <-> camelCase app) ----
   const toProp = (r) => ({ id: r.id, title: r.title, developer: r.developer, location: r.location,
     summary: r.summary, priceFrom: r.price_from, stage: r.stage, status: r.status,
+    legalStatus: r.legal_status || 'not_submitted', legalReviewedAt: r.legal_reviewed_at || null,
     submittedBy: r.submitted_by_email, submittedByRole: r.submitted_by_role, createdAt: r.created_at, verifiedAt: r.verified_at,
     milestones: Array.isArray(r.milestones) ? r.milestones : [], payments: Array.isArray(r.payments) ? r.payments : [],
     images: Array.isArray(r.images) ? r.images : [] });
@@ -158,6 +159,7 @@ window.CODEV = (function () {
         if ('status' in patch) row.status = patch.status; if ('verifiedAt' in patch) row.verified_at = patch.verifiedAt;
         if ('milestones' in patch) row.milestones = patch.milestones; if ('payments' in patch) row.payments = patch.payments;
         if ('images' in patch) row.images = patch.images;
+        if ('legalStatus' in patch) { row.legal_status = patch.legalStatus; row.legal_reviewed_at = ['cleared','conditionally_cleared'].indexOf(patch.legalStatus)>=0 ? nowISO() : null; }
         return sb('/rest/v1/properties?id=eq.' + id, { method: 'PATCH', body: row, prefer: 'return=representation' }); },
       async setStatus(id, status) { return sbDB.properties.update(id, { status, verifiedAt: status === 'verified' ? nowISO() : null }); },
       async remove(id) { return sb('/rest/v1/properties?id=eq.' + id, { method: 'DELETE' }); },
@@ -188,6 +190,20 @@ window.CODEV = (function () {
           user_name: (s.profile && s.profile.name) || s.user.email };
         return sb('/rest/v1/interests', { method: 'POST', body: row, prefer: 'return=representation' }); },
       async listAll() { return sb('/rest/v1/interests?order=created_at.desc&select=*'); },
+    },
+    // Investor / buyer qualification records (Express Interest → qualification → CoDev verification).
+    qualifications: {
+      async add(q) { const s = getSession();
+        const row = { property_id: q.propertyId, property_title: q.propertyTitle || null, developer: q.developer || null,
+          user_id: s.user.id, user_email: s.user.email, user_name: (s.profile && s.profile.name) || s.user.email,
+          investor_type: q.investorType, unit_type: q.unitType || null, amount_band: q.amountBand, currency: q.currency,
+          objective: q.objective, readiness: q.readiness, funding_method: q.fundingMethod, capacity_range: q.capacityRange,
+          mortgage_required: !!q.mortgageRequired, source_of_funds: q.sourceOfFunds, declaration: !!q.declaration,
+          status: 'qualification_in_progress' };
+        return sb('/rest/v1/qualifications', { method: 'POST', body: row, prefer: 'return=representation' }); },
+      async listMine() { const s = getSession(); if (!s) return []; return sb('/rest/v1/qualifications?user_id=eq.' + s.user.id + '&order=created_at.desc&select=*'); },
+      async listAll() { return sb('/rest/v1/qualifications?order=created_at.desc&select=*'); },
+      async update(id, patch) { return sb('/rest/v1/qualifications?id=eq.' + id, { method: 'PATCH', body: patch, prefer: 'return=representation' }); },
     },
   };
 
@@ -238,6 +254,17 @@ window.CODEV = (function () {
     interests: {
       async add(rec) { const list = rd('codev_interests', []); const s = rd(L.sess, null); const r = { id: uid(), createdAt: nowISO(), user_email: s && s.email, user_name: s && s.name, ...rec }; list.unshift(r); wr('codev_interests', list); return r; },
       async listAll() { return rd('codev_interests', []); },
+    },
+    qualifications: {
+      async add(q) { const list = rd('codev_qualifications', []); const s = rd(L.sess, null);
+        const r = { id: uid(), created_at: nowISO(), status: 'qualification_in_progress', user_id: s && s.id, user_email: s && s.email, user_name: s && s.name,
+          property_id: q.propertyId, property_title: q.propertyTitle, developer: q.developer, investor_type: q.investorType, unit_type: q.unitType,
+          amount_band: q.amountBand, currency: q.currency, objective: q.objective, readiness: q.readiness, funding_method: q.fundingMethod,
+          capacity_range: q.capacityRange, mortgage_required: !!q.mortgageRequired, source_of_funds: q.sourceOfFunds, declaration: !!q.declaration };
+        list.unshift(r); wr('codev_qualifications', list); return r; },
+      async listMine() { const s = rd(L.sess, null); return s ? rd('codev_qualifications', []).filter(q => q.user_id === s.id) : []; },
+      async listAll() { return rd('codev_qualifications', []); },
+      async update(id, patch) { const list = rd('codev_qualifications', []); const i = list.findIndex(q => q.id === id); if (i < 0) return; list[i] = { ...list[i], ...patch }; wr('codev_qualifications', list); return list[i]; },
     },
   };
 

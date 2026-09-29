@@ -11,7 +11,7 @@
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=2" />
+<link rel="stylesheet" href="styles.css?v=3" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -50,7 +50,7 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=2"></script>
+<script src="data.js?v=3"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
@@ -132,10 +132,64 @@
   }
   function renderStats(){ const pendAcc=ACCS.filter(a=>a.role!=='admin'&&['pending','under_review',''].includes(String(a.status||'').toLowerCase())).length; const st=[['Accounts awaiting approval',pendAcc],['Properties pending',PROPS.filter(p=>p.status==='pending').length],['Accounts',ACCS.length],['Verified live',PROPS.filter(p=>p.status==='verified').length]];
     $('#stats').innerHTML=st.map(s=>`<div class="stat"><div class="n">${s[1]}</div><div class="l">${s[0]}</div></div>`).join(''); }
-  function renderTabs(){ const tabs=[['properties','Developments'],['accounts','Accounts']]; if(can('manage_admins')) tabs.push(['admins','Admins &amp; roles']);
+  function renderTabs(){ const tabs=[['properties','Developments'],['investors','Investors'],['accounts','Accounts']]; if(can('manage_admins')) tabs.push(['admins','Admins &amp; roles']);
     if(!tabs.some(x=>x[0]===curTab)) curTab='properties';
     const bar=document.querySelector('.tabs'); if(bar) bar.innerHTML=tabs.map(t=>`<button class="tab ${t[0]===curTab?'active':''}" data-t="${t[0]}" onclick="ADMIN.tab('${t[0]}')">${t[1]}</button>`).join(''); }
-  function tab(t){ curTab=t; renderTabs(); $('#panel').innerHTML = t==='admins'?adminsPanel():(t==='accounts'?accountsPanel():propertiesPanel()); }
+  function tab(t){ curTab=t; renderTabs();
+    if(t==='investors'){ $('#panel').innerHTML='<div class="card pad muted">Loading investor pipeline…</div>'; loadInvestors(); return; }
+    $('#panel').innerHTML = t==='admins'?adminsPanel():(t==='accounts'?accountsPanel():propertiesPanel()); }
+
+  // ---------- INVESTOR PIPELINE (qualification → CoDev verification) ----------
+  let QUALS=[];
+  const QSTAT={ qualification_in_progress:['In review','pending'], qualified:['Qualified','pending'], codev_verified:['CoDev Verified','verified'], more_info:['More info needed','pending'], not_qualified:['Not qualified','rejected'], withdrawn:['Withdrawn','rejected'] };
+  const qLabel=(s)=>(QSTAT[s]||[s||'—','role'])[0]; const qCls=(s)=>(QSTAT[s]||['','role'])[1];
+  const GATE={ pending:'Pending', passed:'Passed', review:'Review', failed:'Failed' };
+  async function loadInvestors(){ try{ QUALS=await db.qualifications.listAll(); }
+    catch(e){ if(/qualification|relation|does not exist|not found|42P01|schema cache|\(40[0-4]\)/i.test((e&&e.message)||'')){ $('#panel').innerHTML='<div class="card pad"><b>Investor pipeline needs a one-time backend setup.</b><p class="small muted" style="margin:8px 0 0">Run <code>INVESTOR-QUALIFICATION.sql</code> in the Supabase SQL editor, then reload this page.</p></div>'; return; } QUALS=[]; }
+    $('#panel').innerHTML=investorsPanel(); }
+  function investorsPanel(){
+    const n=QUALS.length, verified=QUALS.filter(q=>q.status==='codev_verified').length, inprog=QUALS.filter(q=>q.status==='qualification_in_progress').length, ready=QUALS.filter(q=>/immediately|30 days/i.test(q.readiness||'')).length;
+    const mx=[['Total qualifications',n],['In review',inprog],['CoDev Verified',verified],['Ready ≤30 days',ready]];
+    const rows=QUALS.map(q=>`<tr>
+      <td><b>${esc(q.user_name||'—')}</b><div class="tiny muted">${esc(q.user_email||'')}</div><div class="tiny muted">${esc(q.investor_type||'')}</div></td>
+      <td>${esc(q.property_title||'—')}<div class="tiny muted">${esc(q.developer||'')}</div></td>
+      <td>${esc(q.amount_band||'—')}<div class="tiny muted">Capacity: ${esc(q.capacity_range||'—')} · ${esc(q.currency||'')}</div></td>
+      <td>${esc(q.readiness||'—')}<div class="tiny muted">${esc(q.source_of_funds||'')}${q.mortgage_required?' · mortgage':''}</div></td>
+      <td><span class="badge ${qCls(q.status)}">${esc(qLabel(q.status))}</span><div class="tiny muted" style="margin-top:3px">ID ${q.gate_identity?esc(GATE[q.gate_identity]||q.gate_identity):'—'} · KYC ${q.gate_kyc?esc(GATE[q.gate_kyc]||q.gate_kyc):'—'}</div></td>
+      <td style="text-align:right"><button class="btn sm navy" onclick="ADMIN.reviewQ('${q.id}')">Review</button></td></tr>`).join('');
+    return `<div class="card pad" style="margin-bottom:16px"><div class="grid g4">${mx.map(m=>`<div class="stat"><div class="n">${m[1]}</div><div class="l">${m[0]}</div></div>`).join('')}</div>
+      <p class="tiny muted" style="margin:12px 0 0">CoDev delivers <b>qualified capital, not leads</b> — verify identity, KYC/AML, intent, capacity and source of funds before granting Deal Room access.</p></div>
+      <div class="card" style="overflow:hidden"><table><thead><tr><th>Investor</th><th>Development</th><th>Amount / capacity</th><th>Readiness / funds</th><th>Status</th><th></th></tr></thead>
+      <tbody>${rows||`<tr><td colspan="6" class="muted tiny" style="padding:16px">No qualifications yet. They appear here when an investor completes the qualification form on a development.</td></tr>`}</tbody></table></div>`;
+  }
+  function reviewQ(id){ const q=QUALS.find(x=>x.id===id); if(!q) return; QEDIT=id;
+    const sel=(name,val,opts)=>`<select id="${name}">${opts.map(o=>`<option value="${o[0]}" ${String(val||'')===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>`;
+    $('#mTitle').textContent='Review qualification';
+    $('#mBody').innerHTML=`<div class="card pad" style="background:var(--soft);margin-bottom:14px"><b>${esc(q.user_name||'')}</b> · ${esc(q.user_email||'')}<br>
+      <span class="tiny muted">${esc(q.investor_type||'')} · interested in <b>${esc(q.property_title||'')}</b>${q.unit_type?` (${esc(q.unit_type)})`:''}</span></div>
+      <div class="grid g2" style="gap:12px">
+        <div><div class="tiny muted">Objective</div>${esc(q.objective||'—')}</div>
+        <div><div class="tiny muted">Readiness</div>${esc(q.readiness||'—')}</div>
+        <div><div class="tiny muted">Amount</div>${esc(q.amount_band||'—')} ${esc(q.currency||'')}</div>
+        <div><div class="tiny muted">Capacity</div>${esc(q.capacity_range||'—')}</div>
+        <div><div class="tiny muted">Funding</div>${esc(q.funding_method||'—')}${q.mortgage_required?' · mortgage required':''}</div>
+        <div><div class="tiny muted">Source of funds</div>${esc(q.source_of_funds||'—')}</div>
+        <div><div class="tiny muted">Declaration</div>${q.declaration?'✓ Accepted':'—'}</div></div>
+      <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
+      <div class="row" style="gap:12px">
+        <div class="field" style="flex:1;min-width:130px"><label>Identity</label>${sel('qId',q.gate_identity||'pending',[['pending','Pending'],['passed','Passed'],['review','Review'],['failed','Failed']])}</div>
+        <div class="field" style="flex:1;min-width:130px"><label>KYC / AML</label>${sel('qKyc',q.gate_kyc||'pending',[['pending','Pending'],['passed','Passed'],['review','Review'],['failed','Failed']])}</div></div>
+      <div class="field"><label>Overall qualification status</label>${sel('qStatus',q.status,[['qualification_in_progress','In review'],['more_info','More information needed'],['qualified','Qualified'],['codev_verified','CoDev Verified'],['not_qualified','Not qualified'],['withdrawn','Withdrawn']])}</div>
+      <p class="tiny muted">Set <b>CoDev Verified</b> only after identity, KYC/AML, intent, capacity and source of funds are satisfied. This gates Deal Room access.</p>
+      <button class="btn primary" style="width:100%" onclick="ADMIN.saveQ()">Save decision</button>`;
+    $('#modal').classList.add('open'); document.body.style.overflow='hidden';
+  }
+  let QEDIT=null;
+  async function saveQ(){ if(!QEDIT) return; const id=QEDIT;
+    const patch={ gate_identity:$('#qId').value, gate_kyc:$('#qKyc').value, status:$('#qStatus').value };
+    if(patch.status==='codev_verified'){ patch.verified_at=window.CODEV.now(); patch.verified_by=(myProfile()||{}).email||''; }
+    try{ await db.qualifications.update(id,patch); closeModal(); toast('Qualification updated'); await loadInvestors(); }
+    catch(err){ toast(err.message||'Save failed'); } }
 
   // ---------- PROPERTIES ----------
   function fundedPct(p){ return (p.milestones||[]).filter(m=>m.status==='certified').reduce((n,m)=>n+(Number(m.pct)||0),0); }
@@ -190,6 +244,8 @@
       <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Participation from (₦)</label><input name="priceFrom" type="number" value="${p.priceFrom||0}"></div>
         <div class="field" style="flex:1"><label>Stage</label><select name="stage">${CFG.STAGES.map(x=>`<option ${x===p.stage?'selected':''}>${x}</option>`).join('')}</select></div>
         <div class="field" style="flex:1"><label>Status</label><select name="status">${['pending','verified','rejected'].map(x=>`<option ${x===p.status?'selected':''}>${x}</option>`).join('')}</select></div></div>
+      <div class="field"><label>Legal review status <span class="tiny muted">— shows a “CoDev Legal Verified” badge publicly only when Cleared / Conditionally cleared</span></label>
+        <select name="legalStatus">${[['not_submitted','Not submitted'],['under_review','Under review'],['information_required','Information required'],['conditionally_cleared','Conditionally cleared'],['cleared','Cleared'],['material_issue','Material issue'],['rejected','Rejected / withdrawn']].map(o=>`<option value="${o[0]}" ${o[0]===(p.legalStatus||'not_submitted')?'selected':''}>${o[1]}</option>`).join('')}</select></div>
 
       <div class="spread" style="margin:6px 0 4px"><label style="margin:0">Milestones &amp; timeline</label><button type="button" class="btn sm" onclick="ADMIN.addMs()">+ Milestone</button></div>
       <div style="overflow-x:auto"><table><thead><tr><th>Milestone</th><th>%</th><th>Target date</th><th>Status</th><th></th></tr></thead><tbody id="msRows"></tbody></table></div>
@@ -232,7 +288,7 @@
   function paySet(i,k,v){ EDIT.payments[i][k]=v; } function delPay(i){ EDIT.payments.splice(i,1); renderPay(); } function addPay(){ EDIT.payments.push({label:'',amount:0,dueDate:'',status:'due'}); renderPay(); }
   async function saveProp(e,id){ e.preventDefault(); const f=e.target;
     try{ await db.properties.update(id,{ title:f.title.value.trim(), developer:f.developer.value.trim(), location:f.location.value.trim(), summary:f.summary.value.trim(),
-      priceFrom:Number(f.priceFrom.value), stage:f.stage.value, status:f.status.value, milestones:EDIT.milestones, payments:EDIT.payments, images:EDIT.images,
+      priceFrom:Number(f.priceFrom.value), stage:f.stage.value, status:f.status.value, legalStatus:f.legalStatus.value, milestones:EDIT.milestones, payments:EDIT.payments, images:EDIT.images,
       verifiedAt:f.status.value==='verified'?window.CODEV.now():null });
       closeModal(); toast('Listing, milestones & payments updated'); await load();
     }catch(err){ toast(err.message||'Save failed'); } return false; }
@@ -340,7 +396,7 @@
   async function delAcc(id){ const a=ACCS.find(x=>x.id===id); if(confirm('Delete account "'+(a.name||a.email)+'"?')){ try{ await db.profiles.remove(id); toast('Account deleted'); await load(); }catch(err){toast(err.message);} } }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,reviewQ,saveQ,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
     addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps};
 
   // Session timeout in the admin console → message, then back to the sign-in gate.
