@@ -30,6 +30,11 @@ window.CODEV = (function () {
       { name: 'Finishing', pct: 15 }, { name: 'Completion / Handover', pct: 5 },
     ],
     MILESTONE_STATUS: ['pending', 'in-progress', 'certified'],
+    // Investor amount bands are anchored in USD; these rates convert them for display.
+    // A super admin can edit them (persisted in platform_settings — see PLATFORM-SETTINGS.sql).
+    CURRENCIES: ['USD', 'NGN', 'GBP'],
+    CURRENCY_SYMBOLS: { USD: '$', NGN: '₦', GBP: '£' },
+    FX_DEFAULT: { USD: 1, NGN: 1600, GBP: 0.79 },
     PAYMENT_STATUS: ['due', 'paid'],
     // Admin role-based access control. An admin's `permissions` array grants specific rights.
     PERMISSIONS: [
@@ -205,6 +210,14 @@ window.CODEV = (function () {
       async listAll() { return sb('/rest/v1/qualifications?order=created_at.desc&select=*'); },
       async update(id, patch) { return sb('/rest/v1/qualifications?id=eq.' + id, { method: 'PATCH', body: patch, prefer: 'return=representation' }); },
     },
+    // Platform settings (super-admin editable). FX rates convert investor amount bands from USD.
+    settings: {
+      async getFx() { try { const r = await sb('/rest/v1/platform_settings?key=eq.fx&select=value', { anon: true });
+        const v = r && r[0] && r[0].value; return (v && typeof v === 'object') ? Object.assign({}, CFG.FX_DEFAULT, v) : Object.assign({}, CFG.FX_DEFAULT); }
+        catch (e) { return Object.assign({}, CFG.FX_DEFAULT); } },
+      async setFx(rates) { const body = { key: 'fx', value: rates, updated_at: nowISO() };
+        return sb('/rest/v1/platform_settings?on_conflict=key', { method: 'POST', body, prefer: 'resolution=merge-duplicates,return=representation' }); },
+    },
   };
 
   // ================= LOCAL FALLBACK MODE (no keys) =================
@@ -265,6 +278,10 @@ window.CODEV = (function () {
       async listMine() { const s = rd(L.sess, null); return s ? rd('codev_qualifications', []).filter(q => q.user_id === s.id) : []; },
       async listAll() { return rd('codev_qualifications', []); },
       async update(id, patch) { const list = rd('codev_qualifications', []); const i = list.findIndex(q => q.id === id); if (i < 0) return; list[i] = { ...list[i], ...patch }; wr('codev_qualifications', list); return list[i]; },
+    },
+    settings: {
+      async getFx() { return Object.assign({}, CFG.FX_DEFAULT, rd('codev_fx', {})); },
+      async setFx(rates) { wr('codev_fx', rates); return rates; },
     },
   };
 
