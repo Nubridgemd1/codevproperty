@@ -365,27 +365,37 @@
     finally { if (btn) { btn.disabled = false; btn.textContent = 'Submit for verification'; } } return false; }
   // ---- Investor / buyer qualification (Express Interest → qualification → CoDev verification) ----
   const INVESTOR_TYPES = ['Property Buyer', 'Co-Developer / Investor', 'Corporate Investor', 'Institutional Investor', 'Joint Investor'];
-  const AMOUNT_BANDS = ['Under $25,000', '$25,000 – $50,000', '$50,000 – $100,000', '$100,000 – $250,000', '$250,000 – $500,000', '$500,000 – $1 million', '$1 million+'];
-  const CURRENCIES = ['USD', 'NGN', 'GBP'];
+  const CURRENCIES = CFG.CURRENCIES || ['USD', 'NGN', 'GBP'];
   const OBJECTIVES = ['Purchase for personal use', 'Purchase for rental / investment', 'Co-develop for investment return', 'Acquire multiple units', 'Institutional / project investment', 'Other'];
   const READINESS = ['Ready immediately', 'Within 30 days', '1 – 3 months', '3 – 6 months', 'Exploring / 6+ months'];
   const FUNDING_METHODS = ['Cash / Savings', 'Business / Corporate funds', 'Mortgage', 'Investment finance', 'Sale of existing asset', 'Investment portfolio', 'Combination', 'Other'];
   const SOURCE_OF_FUNDS = ['Employment income', 'Business income', 'Savings', 'Investments', 'Property / asset sale', 'Inheritance', 'Corporate funds', 'Loan / mortgage', 'Other'];
   const optionList = (opts) => opts.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+  // Amount bands anchored in USD, converted to the chosen currency using super-admin-editable FX rates.
+  const AMOUNT_USD = [25000, 50000, 100000, 250000, 500000, 1000000];
+  let _fx = null;
+  function fmtCur(v, sym) { return sym + Math.round(v).toLocaleString('en-US'); }
+  function amountBands(cur, fx) { const r = (fx && fx[cur]) || 1; const sym = (CFG.CURRENCY_SYMBOLS || {})[cur] || (cur + ' ');
+    const out = ['Under ' + fmtCur(AMOUNT_USD[0] * r, sym)];
+    for (let i = 1; i < AMOUNT_USD.length; i++) out.push(fmtCur(AMOUNT_USD[i - 1] * r, sym) + ' – ' + fmtCur(AMOUNT_USD[i] * r, sym));
+    out.push(fmtCur(AMOUNT_USD[AMOUNT_USD.length - 1] * r, sym) + '+'); return out; }
+  function qCurrency(cur) { const labels = amountBands(cur, _fx); ['qAmount', 'qCapacity'].forEach(function (id) { const s = document.getElementById(id); if (!s) return; const idx = s.selectedIndex; s.innerHTML = labels.map(function (l) { return '<option value="' + esc(l) + '">' + esc(l) + '</option>'; }).join(''); if (idx >= 0) s.selectedIndex = idx; }); }
   async function express(id) { if (!requireLogin(() => express(id))) return;
+    try { _fx = await db.settings.getFx(); } catch (e) { _fx = CFG.FX_DEFAULT; } if (!_fx) _fx = CFG.FX_DEFAULT;
     let p = null; try { p = await db.properties.byId(id); } catch {}
     const title = (p && p.title) || 'this development'; CODEVAPP._q = { id, title, dev: (p && p.developer) || '' };
+    const cur0 = CURRENCIES[0]; const amtOpts = optionList(amountBands(cur0, _fx));
     const sel = (name, opts, extra) => `<select name="${name}" ${extra || ''}>${optionList(opts)}</select>`;
     $('#authTitle').textContent = 'Investor qualification';
     $('#authBody').innerHTML = `<p class="small muted" style="margin-top:0">Complete your investor profile for <b>${esc(title)}</b>. CoDev reviews and verifies every applicant before Deal Room access — this is how we match verified capital to the right opportunity.</p>
       <form onsubmit="return CODEVAPP.submitQualify(event)">
         <div class="field"><label>Investor type</label>${sel('investorType', INVESTOR_TYPES, 'required')}</div>
         <div class="field"><label>Interested unit / property type <span class="tiny muted">(optional)</span></label><input name="unitType" placeholder="e.g. 3-bed apartment, whole floor, SPV participation…"></div>
-        <div class="row" style="gap:10px"><div class="field" style="flex:2;min-width:150px"><label>Investment / purchase amount</label>${sel('amountBand', AMOUNT_BANDS, 'required')}</div><div class="field" style="flex:1;min-width:90px"><label>Currency</label>${sel('currency', CURRENCIES)}</div></div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:2;min-width:150px"><label>Investment / purchase amount</label><select name="amountBand" id="qAmount" required>${amtOpts}</select></div><div class="field" style="flex:1;min-width:90px"><label>Currency</label><select name="currency" id="qCurrency" onchange="CODEVAPP.qCurrency(this.value)">${optionList(CURRENCIES)}</select></div></div>
         <div class="field"><label>Investment objective</label>${sel('objective', OBJECTIVES, 'required')}</div>
         <div class="field"><label>Investment readiness</label>${sel('readiness', READINESS, 'required')}</div>
         <div class="field"><label>Funding method</label>${sel('fundingMethod', FUNDING_METHODS, 'required')}</div>
-        <div class="row" style="gap:10px"><div class="field" style="flex:2;min-width:150px"><label>Available investment capacity</label>${sel('capacityRange', AMOUNT_BANDS, 'required')}</div><div class="field" style="flex:1;min-width:90px"><label>Mortgage?</label>${sel('mortgageRequired', ['No', 'Yes'])}</div></div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:2;min-width:150px"><label>Available investment capacity</label><select name="capacityRange" id="qCapacity" required>${amtOpts}</select></div><div class="field" style="flex:1;min-width:90px"><label>Mortgage?</label>${sel('mortgageRequired', ['No', 'Yes'])}</div></div>
         <div class="field"><label>Principal source of funds</label>${sel('sourceOfFunds', SOURCE_OF_FUNDS, 'required')}</div>
         <div style="display:flex;gap:8px;align-items:flex-start;margin:6px 0 12px;font-size:11.5px;color:var(--ink2)"><input type="checkbox" name="declaration" id="qDecl" required style="margin-top:2px"><label for="qDecl" style="font-weight:normal;text-transform:none;letter-spacing:0;margin:0">I confirm this information is accurate; I understand co-development involves construction and timeline risk and that returns are not guaranteed; I may require independent legal, tax or financial advice; and I consent to CoDev's identity and compliance checks and to relevant information being shared with project parties under applicable confidentiality and data-protection terms.</label></div>
         <button class="btn primary" style="width:100%" id="qBtn">Submit qualification</button>
@@ -491,7 +501,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, submitQualify, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
   // Session timeout → clean logout + re-login prompt (fired by the data layer on an expired JWT).
   window.addEventListener('codev:session-expired', () => {
     renderAuthArea();

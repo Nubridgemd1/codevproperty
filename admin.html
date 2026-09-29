@@ -4,14 +4,14 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CoDev — Admin Console</title>
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=3" />
-<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=3" />
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=3" />
-<link rel="shortcut icon" href="favicon-32.png?v=3" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=4" />
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=4" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=4" />
+<link rel="shortcut icon" href="favicon-32.png?v=4" />
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=3" />
+<link rel="stylesheet" href="styles.css?v=4" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -50,12 +50,12 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=3"></script>
+<script src="data.js?v=4"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
   const $ = (s)=>document.querySelector(s);
-  let curTab='properties'; let PROPS=[], ACCS=[];
+  let curTab='properties'; let PROPS=[], ACCS=[]; let FX=null;
   const toast=(m)=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2800);};
 
   // ---------- role-based access control ----------
@@ -128,6 +128,7 @@
     $('#panel').innerHTML='<div class="card pad muted">Loading…</div>';
     try{ PROPS=await db.properties.listAll(); ACCS=CFG.configured?await db.profiles.listAll():await db.profiles.listAll(); }
     catch(err){ toast(err.message||'Load failed'); }
+    try{ FX=await db.settings.getFx(); }catch(e){ FX=CFG.FX_DEFAULT; } if(!FX) FX=CFG.FX_DEFAULT;
     renderStats(); tab(curTab);
   }
   function renderStats(){ const pendAcc=ACCS.filter(a=>a.role!=='admin'&&['pending','under_review',''].includes(String(a.status||'').toLowerCase())).length; const st=[['Accounts awaiting approval',pendAcc],['Properties pending',PROPS.filter(p=>p.status==='pending').length],['Accounts',ACCS.length],['Verified live',PROPS.filter(p=>p.status==='verified').length]];
@@ -321,6 +322,16 @@
     return perms.filter(k=>k!=='view').map(k=>`<span class="badge role" style="margin:2px 3px 0 0">${esc(permLabel(k))}</span>`).join(''); }
   function adminsPanel(){
     if(!can('manage_admins')) return '<div class="card pad muted">You do not have permission to manage admins.</div>';
+    const fx=FX||CFG.FX_DEFAULT; const cs=CFG.CURRENCY_SYMBOLS||{};
+    const fxCard=`<div class="card pad" style="margin-bottom:18px">
+      <div class="spread" style="margin-bottom:4px"><h3 style="margin:0;font-size:18px">Currency &amp; FX rates</h3><span class="badge role">Super admin</span></div>
+      <p class="small muted" style="margin:0 0 12px">Investor amount bands are anchored in USD and converted for display using these rates (1 USD → currency). Investors pick their currency on the qualification form.</p>
+      <form onsubmit="return ADMIN.saveFx(event)"><div class="row" style="gap:12px;align-items:flex-end">
+        <div class="field" style="flex:1;min-width:120px"><label>USD (base)</label><input value="1" disabled></div>
+        <div class="field" style="flex:1;min-width:120px"><label>NGN per $1 (${esc(cs.NGN||'₦')})</label><input name="NGN" type="number" step="0.0001" min="0" value="${esc(String(fx.NGN||1600))}" required></div>
+        <div class="field" style="flex:1;min-width:120px"><label>GBP per $1 (${esc(cs.GBP||'£')})</label><input name="GBP" type="number" step="0.0001" min="0" value="${esc(String(fx.GBP||0.79))}" required></div>
+        <div class="field" style="flex:0 0 auto"><button class="btn primary" id="fxBtn">Save rates</button></div>
+      </div><p class="tiny muted" style="margin:2px 0 0">Example: at ₦${esc(Number(fx.NGN||1600).toLocaleString())}/$, the “Under $25,000” band shows as “Under ₦${esc(Math.round(25000*(fx.NGN||1600)).toLocaleString())}”.</p></form></div>`;
     const admins=ACCS.filter(a=>a.role==='admin');
     const rows=admins.map(a=>{ const eff=(Array.isArray(a.permissions)&&a.permissions.length)?a.permissions:ALLP; const primary=String(a.email||'').toLowerCase()===String(CFG.ADMIN_EMAIL||'').toLowerCase();
       return `<tr>
@@ -329,11 +340,16 @@
         <td style="white-space:nowrap;text-align:right">
           <button class="btn sm navy" onclick="ADMIN.editRights('${a.id}')">Edit rights</button>
           ${(primary||isMe(a))?'':`<button class="btn ghost sm danger" onclick="ADMIN.revokeAdmin('${a.id}')">Revoke</button>`}</td></tr>`; }).join('');
-    return `<div class="spread" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px">Admins &amp; roles</h3><button class="btn primary sm" onclick="ADMIN.addAdmin()">+ Add admin</button></div>
+    return fxCard + `<div class="spread" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px">Admins &amp; roles</h3><button class="btn primary sm" onclick="ADMIN.addAdmin()">+ Add admin</button></div>
       <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Admin</th><th>Rights</th><th style="text-align:right">Manage</th></tr></thead>
       <tbody>${rows||`<tr><td colspan="3" class="center muted" style="padding:20px">No admins yet.</td></tr>`}</tbody></table></div></div>
       <p class="tiny muted" style="margin-top:10px">Grant each admin only the rights they need. The primary admin and your own account keep full access and can’t be revoked here.</p>`;
   }
+  async function saveFx(e){ e.preventDefault(); const f=e.target; const btn=$('#fxBtn'); if(btn){btn.disabled=true;btn.textContent='Saving…';}
+    const rates={ USD:1, NGN:Number(f.NGN.value)||1600, GBP:Number(f.GBP.value)||0.79 };
+    try{ await db.settings.setFx(rates); FX=rates; toast('FX rates saved — investor bands now convert at these rates.'); tab('admins'); }
+    catch(err){ const m=(err&&err.message)||''; if(/platform_settings|relation|does not exist|42P01|schema cache|\(40[0-4]\)/i.test(m)) toast('FX settings need a one-time setup — run PLATFORM-SETTINGS.sql in Supabase.'); else toast(m||'Save failed'); if(btn){btn.disabled=false;btn.textContent='Save rates';} }
+    return false; }
   function permCheckboxes(sel){ sel=sel||[]; return `<div id="permBox" style="display:grid;gap:8px;margin-top:6px">${PERMS.map(p=>`
       <label class="row" style="gap:9px;align-items:flex-start;cursor:pointer"><input type="checkbox" value="${p[0]}" ${sel.indexOf(p[0])>=0?'checked':''} style="margin-top:3px">
         <span><b style="font-size:14px">${esc(p[1])}</b><div class="tiny muted">${esc(p[2]||'')}</div></span></label>`).join('')}</div>
@@ -396,7 +412,7 @@
   async function delAcc(id){ const a=ACCS.find(x=>x.id===id); if(confirm('Delete account "'+(a.name||a.email)+'"?')){ try{ await db.profiles.remove(id); toast('Account deleted'); await load(); }catch(err){toast(err.message);} } }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,reviewQ,saveQ,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
     addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps};
 
   // Session timeout in the admin console → message, then back to the sign-in gate.
