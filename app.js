@@ -162,6 +162,7 @@
     <div class="ph"${p.images && p.images[0] ? ' data-cover="1"' : ''} style="${coverBg(p)}"><span class="vb badge verified">✓ Verified</span><span class="loc">📍 ${esc(p.location)}</span></div>
     <div style="padding:16px"><div class="small muted" style="font-weight:600">${esc(p.developer)}</div>
       <h3 style="margin:2px 0 6px;font-size:19px">${esc(p.title)}</h3>
+      ${legalVerified(p) ? `<div style="margin:0 0 7px">${legalBadgeHtml(p)}</div>` : ''}
       <p class="small muted" style="min-height:38px">${esc(p.summary)}</p>
       ${fundingBar(p)}
       <div class="spread" style="border-top:1px solid var(--line);padding-top:11px;margin-top:10px">
@@ -225,13 +226,14 @@
               <table style="margin-top:10px;font-size:13px"><thead><tr><th>Milestone</th><th>%</th><th>Target</th><th>Status</th></tr></thead><tbody>
               ${ms.map(m => `<tr><td>${esc(m.name)}</td><td>${m.pct}%</td><td class="tiny muted">${esc(m.targetDate || '—')}</td><td><span class="badge ${m.status === 'certified' ? 'verified' : m.status === 'in-progress' ? 'pending' : 'role'}">${esc(m.status)}</span></td></tr>`).join('') || `<tr><td colspan="4" class="muted tiny">No milestones set.</td></tr>`}
               </tbody></table></div></div>
-          <div><span class="badge verified">✓ Verified</span><h1 style="font-size:30px;margin:10px 0 4px">${esc(p.title)}</h1>
+          <div><span class="badge verified">✓ Verified</span> ${legalBadgeHtml(p)}<h1 style="font-size:30px;margin:10px 0 4px">${esc(p.title)}</h1>
             <div class="muted">${esc(p.developer)} · 📍 ${esc(p.location)}</div><p style="margin:16px 0">${esc(p.summary)}</p>
             <div class="card pad grid g2" style="gap:12px"><div><div class="tiny muted">Participation from</div><div class="serif" style="font-size:22px;color:var(--bronze)">${fmtN(p.priceFrom)}</div></div>
               <div><div class="tiny muted">Current stage</div><div style="font-weight:700;color:var(--navy)">${esc(p.stage)}</div></div></div>
             ${pays.length ? `<div class="card pad" style="margin-top:14px"><h3 style="margin:0 0 8px;font-size:15px">Payments &amp; capital calls</h3>
               <table style="font-size:13px"><tbody>${pays.map(pay => `<tr><td>${esc(pay.label)}</td><td class="tiny muted">${esc(pay.dueDate || '')}</td><td style="text-align:right">${fmtN(pay.amount)}</td><td><span class="badge ${pay.status === 'paid' ? 'verified' : 'pending'}">${esc(pay.status)}</span></td></tr>`).join('')}</tbody></table></div>` : ''}
-            <button class="btn primary" style="margin-top:16px" onclick="CODEVAPP.express('${p.id}')">Express interest</button></div></div></section>`; },
+            <button class="btn primary" style="margin-top:16px" onclick="CODEVAPP.express('${p.id}')">I'm Interested — start qualification</button>
+            <p class="tiny muted" style="margin-top:8px">Complete a short investor qualification. CoDev verifies applicants before granting Deal Room access to confidential project documents.</p></div></div></section>`; },
     how() { const steps = [['List', 'A developer or property owner submits a development or plot.'], ['Verify', 'Admin reviews and verifies the listing before it goes public.'], ['Co-develop', 'Investors browse verified opportunities and express interest.'], ['Govern', 'Milestone-based structure with timelines & payments (sandbox — real escrow with partners).']];
       return sec('How it works', 'From listing to verification to co-development.', `<div class="grid g2">${steps.map((s, i) => `<div class="card pad row" style="gap:14px;align-items:flex-start"><span class="step-n">${i + 1}</span><div><h3 style="margin:0 0 4px;font-size:18px">${s[0]}</h3><p class="small muted" style="margin:0">${s[1]}</p></div></div>`).join('')}</div>`); },
     list(u, mine) { listingPhotos = [];
@@ -361,25 +363,56 @@
       f.reset(); f.developer.value = u.name;
     } catch (err) { toast(err.message || 'Could not submit'); }
     finally { if (btn) { btn.disabled = false; btn.textContent = 'Submit for verification'; } } return false; }
-  // ---- Express interest (production): capture a message, record it, notify the team ----
+  // ---- Investor / buyer qualification (Express Interest → qualification → CoDev verification) ----
+  const INVESTOR_TYPES = ['Property Buyer', 'Co-Developer / Investor', 'Corporate Investor', 'Institutional Investor', 'Joint Investor'];
+  const AMOUNT_BANDS = ['Under $25,000', '$25,000 – $50,000', '$50,000 – $100,000', '$100,000 – $250,000', '$250,000 – $500,000', '$500,000 – $1 million', '$1 million+'];
+  const CURRENCIES = ['USD', 'NGN', 'GBP'];
+  const OBJECTIVES = ['Purchase for personal use', 'Purchase for rental / investment', 'Co-develop for investment return', 'Acquire multiple units', 'Institutional / project investment', 'Other'];
+  const READINESS = ['Ready immediately', 'Within 30 days', '1 – 3 months', '3 – 6 months', 'Exploring / 6+ months'];
+  const FUNDING_METHODS = ['Cash / Savings', 'Business / Corporate funds', 'Mortgage', 'Investment finance', 'Sale of existing asset', 'Investment portfolio', 'Combination', 'Other'];
+  const SOURCE_OF_FUNDS = ['Employment income', 'Business income', 'Savings', 'Investments', 'Property / asset sale', 'Inheritance', 'Corporate funds', 'Loan / mortgage', 'Other'];
+  const optionList = (opts) => opts.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
   async function express(id) { if (!requireLogin(() => express(id))) return;
     let p = null; try { p = await db.properties.byId(id); } catch {}
-    const title = (p && p.title) || 'this development'; CODEVAPP._eiTitle = title; CODEVAPP._eiDev = (p && p.developer) || ''; CODEVAPP._eiId = id;
-    $('#authTitle').textContent = 'Express interest';
-    $('#authBody').innerHTML = `<p class="small muted">Register your interest in <b>${esc(title)}</b>. Our team${p && p.developer ? ` and ${esc(p.developer)}` : ''} will follow up using your account email.</p>
-      <form onsubmit="return CODEVAPP.sendInterest(event)">
-        <div class="field"><label>Message <span class="tiny muted">(optional)</span></label><textarea name="message" rows="3" placeholder="Your budget, questions or what you're looking for…"></textarea></div>
-        <button class="btn primary" style="width:100%" id="eiBtn">Send my interest</button>
-        <p class="tiny muted center" style="margin-top:10px">We'll contact you at your account email.</p>
+    const title = (p && p.title) || 'this development'; CODEVAPP._q = { id, title, dev: (p && p.developer) || '' };
+    const sel = (name, opts, extra) => `<select name="${name}" ${extra || ''}>${optionList(opts)}</select>`;
+    $('#authTitle').textContent = 'Investor qualification';
+    $('#authBody').innerHTML = `<p class="small muted" style="margin-top:0">Complete your investor profile for <b>${esc(title)}</b>. CoDev reviews and verifies every applicant before Deal Room access — this is how we match verified capital to the right opportunity.</p>
+      <form onsubmit="return CODEVAPP.submitQualify(event)">
+        <div class="field"><label>Investor type</label>${sel('investorType', INVESTOR_TYPES, 'required')}</div>
+        <div class="field"><label>Interested unit / property type <span class="tiny muted">(optional)</span></label><input name="unitType" placeholder="e.g. 3-bed apartment, whole floor, SPV participation…"></div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:2;min-width:150px"><label>Investment / purchase amount</label>${sel('amountBand', AMOUNT_BANDS, 'required')}</div><div class="field" style="flex:1;min-width:90px"><label>Currency</label>${sel('currency', CURRENCIES)}</div></div>
+        <div class="field"><label>Investment objective</label>${sel('objective', OBJECTIVES, 'required')}</div>
+        <div class="field"><label>Investment readiness</label>${sel('readiness', READINESS, 'required')}</div>
+        <div class="field"><label>Funding method</label>${sel('fundingMethod', FUNDING_METHODS, 'required')}</div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:2;min-width:150px"><label>Available investment capacity</label>${sel('capacityRange', AMOUNT_BANDS, 'required')}</div><div class="field" style="flex:1;min-width:90px"><label>Mortgage?</label>${sel('mortgageRequired', ['No', 'Yes'])}</div></div>
+        <div class="field"><label>Principal source of funds</label>${sel('sourceOfFunds', SOURCE_OF_FUNDS, 'required')}</div>
+        <div style="display:flex;gap:8px;align-items:flex-start;margin:6px 0 12px;font-size:11.5px;color:var(--ink2)"><input type="checkbox" name="declaration" id="qDecl" required style="margin-top:2px"><label for="qDecl" style="font-weight:normal;text-transform:none;letter-spacing:0;margin:0">I confirm this information is accurate; I understand co-development involves construction and timeline risk and that returns are not guaranteed; I may require independent legal, tax or financial advice; and I consent to CoDev's identity and compliance checks and to relevant information being shared with project parties under applicable confidentiality and data-protection terms.</label></div>
+        <button class="btn primary" style="width:100%" id="qBtn">Submit qualification</button>
+        <p class="tiny muted center" style="margin-top:8px">CoDev verification is required before Deal Room access. This is not investment, legal or tax advice.</p>
       </form>`;
     $('#authModal').classList.add('show'); }
-  async function sendInterest(e) { e.preventDefault(); const msg = (e.target.message.value || '').trim(); const btn = $('#eiBtn'); btn.disabled = true; btn.textContent = 'Sending…';
-    try { await db.interests.add({ propertyId: CODEVAPP._eiId, propertyTitle: CODEVAPP._eiTitle, developer: CODEVAPP._eiDev, message: msg });
-      closeAuth(); toast('Interest sent — the team will be in touch shortly.'); }
+  async function submitQualify(e) { e.preventDefault(); const f = e.target;
+    if (!f.declaration.checked) { toast('Please accept the declaration to continue.'); return false; }
+    const btn = $('#qBtn'); btn.disabled = true; btn.textContent = 'Submitting…';
+    const q = { propertyId: CODEVAPP._q.id, propertyTitle: CODEVAPP._q.title, developer: CODEVAPP._q.dev,
+      investorType: f.investorType.value, unitType: f.unitType.value.trim(), amountBand: f.amountBand.value, currency: f.currency.value,
+      objective: f.objective.value, readiness: f.readiness.value, fundingMethod: f.fundingMethod.value, capacityRange: f.capacityRange.value,
+      mortgageRequired: f.mortgageRequired.value === 'Yes', sourceOfFunds: f.sourceOfFunds.value, declaration: true };
+    try { await db.qualifications.add(q); closeAuth(); toast('Qualification submitted — CoDev will review and verify, then unlock Deal Room access.'); }
     catch (err) { const m = (err && err.message) || '';
-      if (/interests|relation|does not exist|not found|\(40[34]\)|42P01|schema cache/i.test(m)) { closeAuth(); toast('Interest received — the team will be in touch shortly.'); }
-      else { toast(m || 'Could not send interest'); btn.disabled = false; btn.textContent = 'Send my interest'; } }
+      if (/qualification|relation|does not exist|not found|\(40[34]\)|42P01|schema cache/i.test(m)) { closeAuth(); toast('Qualification received — CoDev will review and verify.'); }
+      else { toast(m || 'Could not submit qualification'); btn.disabled = false; btn.textContent = 'Submit qualification'; } }
     return false; }
+
+  // ---- CoDev Legal Verified badge (admin-controlled; restrained trust indicator with disclosure) ----
+  function legalVerified(p) { return ['cleared', 'conditionally_cleared'].indexOf(String(p && p.legalStatus || '')) >= 0; }
+  function legalBadgeHtml(p) { return legalVerified(p) ? `<span class="badge legalv" onclick="event.stopPropagation();event.preventDefault();CODEVAPP.legalInfo()" title="What this means">🛡️ CoDev Legal Verified</span>` : ''; }
+  function legalInfo() { $('#authTitle').textContent = 'CoDev Legal Verified';
+    $('#authBody').innerHTML = `<p class="small">“CoDev Legal Verified” indicates that specified development documentation has been reviewed under CoDev's legal due-diligence process, within a defined scope, as at the review date.</p>
+      <p class="small muted">It is <b>not</b> a guarantee of title, investment performance or transaction outcome, and is <b>not</b> a substitute for independent legal, tax, financial or investment advice. Any disclosed conditions remain the buyer's responsibility to review before commitment.</p>
+      <button class="btn primary" style="width:100%" onclick="CODEVAPP.closeAuth()">Understood</button>`;
+    $('#authModal').classList.add('show'); }
 
   // ---- image lightbox (click a photo to enlarge; arrows / swipe / Esc) ----
   function ensureLB() { let bg = document.getElementById('lbBg'); if (bg) return bg;
@@ -458,7 +491,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, sendInterest, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, submitQualify, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
   // Session timeout → clean logout + re-login prompt (fired by the data layer on an expired JWT).
   window.addEventListener('codev:session-expired', () => {
     renderAuthArea();
