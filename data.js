@@ -89,7 +89,7 @@ window.CODEV = (function () {
   }
 
   // ---- mappers (snake_case DB <-> camelCase app) ----
-  const toProp = (r) => ({ id: r.id, title: r.title, developer: r.developer, location: r.location,
+  const toProp = (r) => ({ id: r.id, ref: r.ref || '', title: r.title, developer: r.developer, location: r.location,
     address: r.address || '', propertyType: r.property_type || '',
     units: (r.units === 0 || r.units) ? r.units : '', deliveryDate: r.delivery_date || '',
     summary: r.summary, priceFrom: r.price_from, stage: r.stage, status: r.status,
@@ -176,6 +176,7 @@ window.CODEV = (function () {
         if ('milestones' in patch) row.milestones = patch.milestones; if ('payments' in patch) row.payments = patch.payments;
         if ('images' in patch) row.images = patch.images;
         const newKeys = [];
+        if ('ref' in patch) { row.ref = patch.ref || null; newKeys.push('ref'); }
         if ('address' in patch) { row.address = patch.address || null; newKeys.push('address'); }
         if ('propertyType' in patch) { row.property_type = patch.propertyType || null; newKeys.push('property_type'); }
         if ('units' in patch) { row.units = (patch.units === '' || patch.units == null) ? null : Number(patch.units); newKeys.push('units'); }
@@ -311,5 +312,22 @@ window.CODEV = (function () {
 
   const fmtN = (n) => '₦' + (Number(n) || 0).toLocaleString();
   const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  return { CFG, auth, db, fmtN, esc, now: nowISO };
+
+  // Unique, human-readable listing reference — generated once a listing is complete
+  // (published/verified) and then kept for the life of the listing. Format: CDV-XXXXXX
+  // (unambiguous alphabet, no 0/O/1/I). Each unit is tagged REF-U001, REF-U002, …
+  const makeListingRef = () => {
+    const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = '';
+    const rnd = (window.crypto && crypto.getRandomValues) ? crypto.getRandomValues(new Uint32Array(6)) : null;
+    for (let i = 0; i < 6; i++) { const r = rnd ? rnd[i] : Math.floor(Math.random() * 1e9); s += A[r % A.length]; }
+    return 'CDV-' + s;
+  };
+  const unitIds = (ref, count) => {
+    const n = Math.max(0, parseInt(count, 10) || 0); const out = [];
+    if (!ref) return out;
+    for (let i = 1; i <= n; i++) out.push(ref + '-U' + String(i).padStart(3, '0'));
+    return out;
+  };
+
+  return { CFG, auth, db, fmtN, esc, now: nowISO, makeListingRef, unitIds };
 })();

@@ -198,7 +198,7 @@
   function propRowsHtml(list){
     const canL=can('manage_listings');
     return (list||[]).map(p=>`<tr>
-      <td><b>${esc(p.title)}</b><div class="tiny muted">${esc(p.location)} · funded ${fundedPct(p)}%</div></td>
+      <td><b>${esc(p.title)}</b>${p.ref?` <span class="badge role" style="font-family:monospace">${esc(p.ref)}</span>`:''}<div class="tiny muted">${esc(p.location)} · funded ${fundedPct(p)}%</div></td>
       <td>${esc(p.developer||'')}<div class="tiny muted">${esc(p.submittedBy||'')} · <span class="badge role">${p.submittedByRole||'—'}</span></div></td>
       <td>${fmtN(p.priceFrom)}<div class="tiny muted">${esc(p.stage||'')}</div></td>
       <td><span class="badge ${p.status}">${p.status}</span></td>
@@ -228,7 +228,11 @@
       <tbody id="propRows">${propRowsHtml(PROPS)}</tbody></table></div></div>
       <p class="tiny muted" style="margin-top:10px">Verify to publish. “Edit · milestones” lets you modify details, the milestone timeline and payments. Listings come from developers and property owners alike.</p>`;
   }
-  async function setStatus(id,s){ try{ await db.properties.setStatus(id,s); toast('Listing '+(s==='verified'?'verified & published':s)); await load(); }catch(err){toast(err.message);} }
+  async function setStatus(id,s){ const p=PROPS.find(x=>x.id===id)||{};
+    const patch={ status:s, verifiedAt: s==='verified'?window.CODEV.now():null };
+    if(s==='verified' && !p.ref) patch.ref=window.CODEV.makeListingRef(); // assign the permanent listing reference once, on publish
+    try{ await db.properties.update(id,patch); toast('Listing '+(s==='verified'?('verified & published · '+(patch.ref||p.ref||'')):s)); await load(); }catch(err){toast(err.message);} }
+  function copyRef(v){ try{ navigator.clipboard.writeText(v); toast('Copied '+v); }catch{ toast('Copy not available'); } }
   async function delProp(id){ const p=PROPS.find(x=>x.id===id); if(confirm('Delete "'+p.title+'"?')){ try{ await db.properties.remove(id); toast('Listing deleted'); await load(); }catch(err){toast(err.message);} } }
 
   let EDIT=null;
@@ -243,6 +247,14 @@
         <div class="field" style="flex:1"><label>Property type</label><select name="propertyType"><option value="">—</option>${CFG.PROPERTY_TYPES.map(x=>`<option ${x===p.propertyType?'selected':''}>${x}</option>`).join('')}</select></div>
         <div class="field" style="flex:1"><label>Number of units</label><input name="units" type="number" min="0" step="1" value="${(p.units===0||p.units)?p.units:''}"></div>
         <div class="field" style="flex:1"><label>Proposed delivery date</label><input name="deliveryDate" type="date" value="${esc(p.deliveryDate||'')}"></div></div>
+      ${(function(){ const ids=window.CODEV.unitIds(p.ref,p.units); return p.ref
+        ? `<div class="field"><label>Listing reference &amp; unit register</label>
+            <div class="card pad" style="background:var(--soft)">
+              <div class="spread"><b style="font-family:monospace;font-size:15px;color:var(--navy)">${esc(p.ref)}</b><button type="button" class="btn ghost sm" onclick="ADMIN.copyRef('${esc(p.ref)}')">Copy ref</button></div>
+              <div class="tiny muted" style="margin:8px 0 4px">${ids.length} unit tag${ids.length===1?'':'s'} — every unit carries the listing reference:</div>
+              <div style="max-height:130px;overflow:auto;font-family:monospace;font-size:12px;line-height:1.8">${ids.map(u=>esc(u)).join('<br>')||'<span class="muted">Set “Number of units” and save to generate unit tags.</span>'}</div>
+            </div></div>`
+        : `<div class="field"><label>Listing reference</label><div class="tiny muted">A unique reference (e.g. <b>CDV-XXXXXX</b>) and a tag for every unit (<b>CDV-XXXXXX-U001 …</b>) are generated automatically when this listing is published — set Status to “verified” and Save.</div></div>`; })()}
       <div class="field"><label>Summary</label><textarea name="summary" rows="2">${esc(p.summary||'')}</textarea></div>
       <div class="field"><label>Photos <span class="tiny muted">— add or take a picture (up to 8). The <b>Cover</b> photo is what shows on the listing card; tap ★ on any photo to make it the cover.</span></label>
         <label class="photo-drop"><input type="file" accept="image/*,.heic,.heif" multiple onchange="ADMIN.addPhotos(this)"><span class="pd-inner">📷 Add photos or take a picture</span></label>
@@ -292,11 +304,12 @@
     <td><button type="button" class="btn ghost sm" onclick="ADMIN.delPay(${i})">✕</button></td></tr>`).join('')||`<tr><td colspan="5" class="tiny muted">No payments — add capital calls / releases.</td></tr>`; }
   function msSet(i,k,v){ EDIT.milestones[i][k]=v; } function delMs(i){ EDIT.milestones.splice(i,1); renderMs(); } function addMs(){ EDIT.milestones.push({name:'',pct:0,status:'pending',targetDate:'',releasedDate:''}); renderMs(); }
   function paySet(i,k,v){ EDIT.payments[i][k]=v; } function delPay(i){ EDIT.payments.splice(i,1); renderPay(); } function addPay(){ EDIT.payments.push({label:'',amount:0,dueDate:'',status:'due'}); renderPay(); }
-  async function saveProp(e,id){ e.preventDefault(); const f=e.target;
+  async function saveProp(e,id){ e.preventDefault(); const f=e.target; const p=PROPS.find(x=>x.id===id)||{};
+    const willVerify=f.status.value==='verified'; const ref = p.ref || (willVerify ? window.CODEV.makeListingRef() : '');
     try{ await db.properties.update(id,{ title:f.title.value.trim(), developer:f.developer.value.trim(), location:f.location.value.trim(), summary:f.summary.value.trim(),
       address:f.address.value.trim(), propertyType:f.propertyType.value, units:f.units.value, deliveryDate:f.deliveryDate.value,
       priceFrom:Number(f.priceFrom.value), stage:f.stage.value, status:f.status.value, legalStatus:f.legalStatus.value, milestones:EDIT.milestones, payments:EDIT.payments, images:EDIT.images,
-      verifiedAt:f.status.value==='verified'?window.CODEV.now():null });
+      verifiedAt:willVerify?window.CODEV.now():null, ...(ref?{ref}:{}) });
       closeModal(); toast('Listing, milestones & payments updated'); await load();
     }catch(err){ toast(err.message||'Save failed'); } return false; }
 
@@ -418,7 +431,7 @@
   async function delAcc(id){ const a=ACCS.find(x=>x.id===id); if(confirm('Delete account "'+(a.name||a.email)+'"?')){ try{ await db.profiles.remove(id); toast('Account deleted'); await load(); }catch(err){toast(err.message);} } }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,delProp,editProp,saveProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+  window.ADMIN={login,lock,tab,setStatus,copyRef,delProp,editProp,saveProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
     addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps};
 
   // Session timeout in the admin console → message, then back to the sign-in gate.
