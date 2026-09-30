@@ -4,14 +4,14 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CoDev — Admin Console</title>
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=6" />
-<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=6" />
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=6" />
-<link rel="shortcut icon" href="favicon-32.png?v=6" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=7" />
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=7" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=7" />
+<link rel="shortcut icon" href="favicon-32.png?v=7" />
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=6" />
+<link rel="stylesheet" href="styles.css?v=7" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -50,12 +50,12 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=6"></script>
+<script src="data.js?v=7"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
   const $ = (s)=>document.querySelector(s);
-  let curTab='properties'; let PROPS=[], ACCS=[], DOCS=[]; let FX=null;
+  let curTab='properties'; let PROPS=[], ACCS=[], DOCS=[], DRA=[]; let FX=null;
   const toast=(m)=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2800);};
 
   // ---------- role-based access control ----------
@@ -213,12 +213,13 @@
   async function loadLegal(){ $('#panel').innerHTML='<div class="card pad muted">Loading documents…</div>';
     try{ DOCS=await db.documents.listAll(); }
     catch(e){ if(/listing_documents|relation|does not exist|42P01|schema cache|\(40[0-4]\)/i.test((e&&e.message)||'')){ $('#panel').innerHTML='<div class="card pad"><b>Document review needs a one-time backend setup.</b><p class="small muted" style="margin:8px 0 0">Run <code>DOCUMENTS.sql</code> in the Supabase SQL editor, then reload this page.</p></div>'; return; } DOCS=[]; }
+    try{ DRA=await db.dealroom.listAccess(); }catch(e){ DRA=[]; } // Deal Room grants (present after DEALROOM.sql)
     $('#panel').innerHTML=legalPanel(); }
   function legalPanel(){
     const byProp={}; DOCS.forEach(d=>{ (byProp[d.propertyId]=byProp[d.propertyId]||[]).push(d); });
     const cards=(PROPS||[]).map(p=>{ const list=byProp[p.id]||[]; const rows=mergeDocsAdmin(list).map(r=>legalDocRow(p,r)).join('');
       return `<div class="card pad" style="margin-bottom:14px"><div class="spread"><div><b>${esc(p.title)}</b>${p.ref?` <span class="badge role" style="font-family:monospace">${esc(p.ref)}</span>`:''}<div class="tiny muted">${esc(p.developer||'')} · ${esc(p.location||'')} · <span class="badge ${p.status}">${p.status}</span></div></div>${docSummaryChip(list)}</div>
-      <div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Document</th><th>File</th><th>Decision</th><th>Note</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+      <div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Document</th><th>File</th><th>Decision</th><th>Note</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${dealAccessBlock(p)}</div>`;
     }).join('');
     return `<div class="card pad" style="margin-bottom:16px"><b>Legal review &amp; due diligence</b><p class="tiny muted" style="margin:6px 0 0">Review each listing's key documents and set a verification decision. Buyers see the status on the listing; files are visible only to legal &amp; admins. Admins can publish a listing even while documents are awaiting or under review.</p></div>${cards||'<div class="card pad muted">No listings yet.</div>'}`;
   }
@@ -231,6 +232,15 @@
   }
   async function reviewDoc(id){ const s=document.getElementById('ds_'+id), n=document.getElementById('dn_'+id); if(!s) return; const status=s.value, note=(n&&n.value.trim())||'';
     try{ await db.documents.review(id,{status,note}); toast('Document '+(status==='cleared'?'verified':status==='rejected'?'flagged':'updated')); await loadLegal(); }catch(e){ toast(e.message||'Save failed'); } }
+  function dealAccessBlock(p){ const list=(DRA||[]).filter(a=>a.propertyId===p.id);
+    const rows=list.map(a=>{ const c=a.status==='active'?'verified':a.status==='revoked'?'rejected':'role'; const ack=a.acknowledgedAt?('ack '+esc(new Date(a.acknowledgedAt).toLocaleDateString())):'not acknowledged';
+      return `<div class="spread" style="padding:4px 0;border-top:1px solid var(--line)"><div><span class="small">${esc(a.userName||a.userEmail||'—')}</span> <span class="badge ${c}">${esc(a.status)}</span><div class="tiny muted">${ack} · ${esc(a.userEmail||'')}</div></div><div class="row" style="gap:6px">${a.status==='active'?`<button class="btn ghost sm danger" onclick="ADMIN.revokeAccess('${a.id}')">Revoke</button>`:`<button class="btn ghost sm" onclick="ADMIN.reinstateAccess('${a.id}')">Reinstate</button>`}</div></div>`; }).join('');
+    return `<div style="margin-top:12px"><div class="spread"><span class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.04em">Deal Room access (${list.length})</span><button class="btn ghost sm" onclick="ADMIN.dealLog('${p.id}')">View access log</button></div>${rows||'<div class="tiny muted" style="padding:4px 0">No buyers have entered the Deal Room yet.</div>'}</div>`; }
+  async function revokeAccess(id){ if(!confirm('Revoke this buyer’s Deal Room access?')) return; try{ await db.dealroom.revoke(id); toast('Access revoked'); await loadLegal(); }catch(e){ toast(e.message||'Failed'); } }
+  async function reinstateAccess(id){ try{ await db.dealroom.reinstate(id); toast('Access reinstated'); await loadLegal(); }catch(e){ toast(e.message||'Failed'); } }
+  async function dealLog(pid){ $('#mTitle').textContent='Deal Room access log'; $('#mBody').innerHTML='<div class="muted">Loading…</div>'; $('#modal').classList.add('show');
+    try{ const ev=await db.dealroom.listEvents(pid); $('#mBody').innerHTML= ev.length? `<div style="max-height:60vh;overflow:auto"><table><thead><tr><th>When</th><th>Who</th><th>Event</th><th>Doc</th></tr></thead><tbody>${ev.map(e=>`<tr><td class="tiny">${esc(new Date(e.createdAt).toLocaleString())}</td><td class="tiny">${esc(e.userEmail||'—')}</td><td><span class="badge role">${esc(e.event)}</span></td><td class="tiny muted">${esc(e.docKey||'')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="muted">No access events yet.</div>'; }
+    catch(e){ $('#mBody').innerHTML='<div class="muted">Could not load the log.</div>'; } }
 
   function adminPropLocations(){ const s=new Set(); PROPS.forEach(p=>{ const l=(p.location||'').trim(); if(l) s.add(l); }); return Array.from(s).sort((a,b)=>a.localeCompare(b)); }
   function propRowsHtml(list){
@@ -476,7 +486,7 @@
   async function delAcc(id){ const a=ACCS.find(x=>x.id===id); if(confirm('Delete account "'+(a.name||a.email)+'"?')){ try{ await db.profiles.remove(id); toast('Account deleted'); await load(); }catch(err){toast(err.message);} } }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,copyRef,reviewDoc,admAccess,delProp,editProp,saveProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+  window.ADMIN={login,lock,tab,setStatus,copyRef,reviewDoc,revokeAccess,reinstateAccess,dealLog,admAccess,delProp,editProp,saveProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
     addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps};
 
   // Session timeout in the admin console → message, then back to the sign-in gate.

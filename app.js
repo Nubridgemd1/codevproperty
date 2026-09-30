@@ -260,7 +260,7 @@
               <div style="max-height:200px;overflow:auto;font-family:monospace;font-size:12px;line-height:1.9;margin-top:8px">${unitIds(p.ref, p.units).map(u => esc(u)).join('<br>')}</div></details>` : ''}
             ${pays.length ? `<div class="card pad" style="margin-top:14px"><h3 style="margin:0 0 8px;font-size:15px">Payments &amp; capital calls</h3>
               <table style="font-size:13px"><tbody>${pays.map(pay => `<tr><td>${esc(pay.label)}</td><td class="tiny muted">${esc(pay.dueDate || '')}</td><td style="text-align:right">${fmtN(pay.amount)}</td><td><span class="badge ${pay.status === 'paid' ? 'verified' : 'pending'}">${esc(pay.status)}</span></td></tr>`).join('')}</tbody></table></div>` : ''}
-            <button class="btn primary" style="margin-top:16px" onclick="CODEVAPP.express('${p.id}')">I'm Interested — start qualification</button>
+            <div class="row" style="gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn primary" onclick="CODEVAPP.express('${p.id}')">I'm Interested — start qualification</button><a class="btn" href="#/dealroom/${p.id}">🔐 Deal Room</a></div>
             <p class="tiny muted" style="margin-top:8px">Complete a short investor qualification. CoDev verifies applicants before granting Deal Room access to confidential project documents.</p></div></div></section>`; },
     how() { const steps = [['List', 'A developer or property owner submits a development or plot.'], ['Verify', 'Admin reviews and verifies the listing before it goes public.'], ['Co-develop', 'Investors browse verified opportunities and express interest.'], ['Govern', 'Milestone-based structure with timelines & payments (sandbox — real escrow with partners).']];
       return sec('How it works', 'From listing to verification to co-development.', `<div class="grid g2">${steps.map((s, i) => `<div class="card pad row" style="gap:14px;align-items:flex-start"><span class="step-n">${i + 1}</span><div><h3 style="margin:0 0 4px;font-size:18px">${s[0]}</h3><p class="small muted" style="margin:0">${s[1]}</p></div></div>`).join('')}</div>`); },
@@ -305,6 +305,28 @@
         <div class="tiny muted" style="margin-bottom:14px">Buyers see only the verification <b>status</b> of each document — never your files. Files are visible only to you and CoDev's legal/verification team.</div>
         <div id="docList" class="grid" style="gap:10px">${rows.map(r => docRowDev(p.id, r)).join('')}</div>`);
     },
+    dealRoom(u, p, st) {
+      if (!p) return sec('Not found', '', empty('Development not found.'));
+      const head = `<a class="small muted" href="#/opp/${p.id}">← Back to ${esc(p.title)}</a>
+        <h1 style="font-size:26px;margin:8px 0 2px">🔐 Deal Room — ${esc(p.title)}</h1>
+        <div class="muted" style="margin-bottom:14px">${p.ref ? 'Ref ' + esc(p.ref) + ' · ' : ''}Confidential due-diligence documents for CoDev-verified investors.</div>`;
+      if (!st.verified) return sec('', '', head + `<div class="card pad"><h3 style="margin:0 0 6px;font-size:17px">CoDev verification required</h3><p class="small muted">The Deal Room opens to investors CoDev has verified for this development. Complete the short qualification and we'll review and verify you.</p><a class="btn primary" style="margin-top:6px" href="#/opp/${p.id}">Start / check qualification →</a></div>`);
+      const acc = st.access;
+      if (acc && acc.status === 'revoked') return sec('', '', head + `<div class="card pad"><h3 style="margin:0 0 6px;font-size:17px">Access revoked</h3><p class="small muted">Your Deal Room access for this development has been revoked. Please contact CoDev at info@codevproperty.com.</p></div>`);
+      if (acc && acc.status === 'expired') return sec('', '', head + `<div class="card pad"><h3 style="margin:0 0 6px;font-size:17px">Access expired</h3><p class="small muted">Your Deal Room access has expired. Please contact CoDev to renew it.</p></div>`);
+      if (!acc || !acc.acknowledgedAt) {
+        return sec('', '', head + `<div class="card pad">
+          <h3 style="margin:0 0 8px;font-size:17px">Confidentiality acknowledgement</h3>
+          <p class="small muted">The documents in this Deal Room (title, legal, survey, approvals, SPV/JV and related due-diligence) are confidential and shared solely to evaluate this opportunity. By entering you agree to keep them confidential, use them only for your own investment evaluation, not copy, share or distribute them, and that your access is logged and may be revoked at any time.</p>
+          <label class="row" style="gap:9px;align-items:flex-start;margin:12px 0;cursor:pointer"><input type="checkbox" id="ndaAck" style="margin-top:3px"><span class="small">I have read and agree to the confidentiality terms above.</span></label>
+          <button class="btn primary" onclick="CODEVAPP.enterDealRoom('${p.id}')">Acknowledge &amp; enter Deal Room</button>
+        </div>`);
+      }
+      const docs = st.docs || [];
+      const rows = docs.length ? docs.map(d => `<div class="card pad spread"><div><b>${esc(d.label)}</b><div class="tiny muted">${d.fileName ? esc(d.fileName) : ''}${d.reviewedAt ? ' · verified ' + esc(fmtDate(d.reviewedAt)) : ''}</div></div><div class="row" style="gap:8px">${d.fileData ? `<a class="btn ghost sm" href="${d.fileData}" target="_blank" rel="noopener" onclick="CODEVAPP.logDeal('${p.id}','${esc(d.key)}','viewed')">View</a><a class="btn ghost sm" href="${d.fileData}" download="${esc(d.fileName || d.key)}" onclick="CODEVAPP.logDeal('${p.id}','${esc(d.key)}','downloaded')">Download</a>` : '<span class="tiny muted">No file</span>'}</div></div>`).join('') : empty('No cleared documents are available yet. Documents appear here as CoDev legal review clears them.');
+      return sec('', '', head + `<div class="card pad" style="background:#fff8e6;border-color:#f0e2b8;margin-bottom:12px"><b>🔒 Confidential.</b> <span class="small muted">Access granted ${acc.acknowledgedAt ? esc(fmtDate(acc.acknowledgedAt)) : ''}. Your views and downloads are logged. Please do not share these documents.</span></div>
+        <div class="grid" style="gap:10px">${rows}</div>`);
+    },
   };
   function listCards(mine) { if (!mine || !mine.length) return `<div class="card pad small muted">No submissions yet. <a href="#/list">List a property →</a></div>`;
     return `<div class="grid" style="gap:10px">${mine.map(p => `<div class="card pad"><div class="spread"><div class="row" style="gap:11px;align-items:center">${p.images && p.images[0] ? `<img src="${p.images[0]}" alt="" style="width:48px;height:48px;border-radius:9px;object-fit:cover;flex:none">` : ''}<div><b>${esc(p.title)}</b>${p.ref ? ` <span class="tiny" style="font-family:monospace;color:var(--ink2)">${esc(p.ref)}</span>` : ''}<div class="tiny muted">${esc(p.location)} · ${fmtN(p.priceFrom)} · funded ${funded(p)}%</div></div></div><span class="badge ${p.status}">${p.status}</span></div>
@@ -316,6 +338,9 @@
       ${d.note ? `<div class="tiny" style="color:#b4232a;margin-top:5px">Reviewer note: ${esc(d.note)}</div>` : ''}
       <label class="photo-drop" style="margin-top:9px"><input type="file" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.heic,.heif" onchange="CODEVAPP.submitDoc('${pid}','${esc(r.key)}',this)"><span class="pd-inner">📤 ${d.fileName ? 'Replace document' : 'Upload document'} — PDF or image, max 6MB</span></label>
     </div>`; }
+  async function enterDealRoom(pid) { const ck = document.getElementById('ndaAck'); if (!ck || !ck.checked) { toast('Please acknowledge the confidentiality terms'); return; }
+    try { await db.dealroom.acknowledge(pid, 'v1'); toast('Welcome to the Deal Room'); route(); } catch (e) { toast((e && e.message) || 'Could not open the Deal Room'); } }
+  function logDeal(pid, key, event) { try { db.dealroom.log(pid, event, key); } catch (e) {} }
   async function submitDoc(pid, key, input) { const f = input.files && input.files[0]; input.value = ''; if (!f) return;
     if (f.size > 6 * 1024 * 1024) { toast('File too large — max 6MB'); return; }
     const label = ((CFG.REQUIRED_DOCS || []).find(t => t.key === key) || {}).label || key;
@@ -542,7 +567,7 @@
   // ---- router (async) ----
   async function route() {
     const h = (location.hash || '#/').slice(2); const [path, arg] = h.split('/');
-    const gated = ['list', 'investor', 'developer', 'account', 'docs'];
+    const gated = ['list', 'investor', 'developer', 'account', 'docs', 'dealroom'];
     if (gated.includes(path) && !requireLogin(() => route())) { app.innerHTML = sec('Sign in required', 'Please sign in to continue.', ''); return; }
     if (gated.includes(path) && mfaGate()) { app.innerHTML = sec('Two-factor required', 'Complete two-factor authentication to continue.', ''); return; }
     // Admin-verification gate: a signed-in account holder cannot operate, list or view until approved.
@@ -554,6 +579,10 @@
       else if (path === 'opportunities') app.innerHTML = V.opportunities(await db.properties.listPublic());
       else if (path === 'opp') { const p = await db.properties.byId(arg); const dstat = p ? await db.documents.statusForProperty(arg) : []; app.innerHTML = V.opp(p, dstat); }
       else if (path === 'docs') { const p = await db.properties.byId(arg); const docs = p ? await db.documents.listForProperty(arg) : []; app.innerHTML = V.docs(u, p, docs); }
+      else if (path === 'dealroom') { const p = await db.properties.byId(arg); let verified = false, access = null, docs = [];
+        if (p) { try { verified = await db.dealroom.isVerifiedBuyer(p.id); } catch {} try { access = await db.dealroom.myAccess(p.id); } catch {}
+          if (verified && access && access.status === 'active' && access.acknowledgedAt) { try { docs = await db.dealroom.clearedDocs(p.id); } catch {} try { await db.dealroom.log(p.id, 'opened', null); } catch {} } }
+        app.innerHTML = V.dealRoom(u, p, { verified, access, docs }); }
       else if (path === 'how') app.innerHTML = V.how();
       else if (path === 'list') app.innerHTML = V.list(u, await db.properties.listMine());
       else if (path === 'investor') app.innerHTML = V.investor(u, await db.properties.listPublic());
@@ -565,7 +594,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, enterDealRoom, logDeal, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
   // Session timeout → clean logout + re-login prompt (fired by the data layer on an expired JWT).
   window.addEventListener('codev:session-expired', () => {
     renderAuthArea();
