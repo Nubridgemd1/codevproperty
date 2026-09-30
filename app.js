@@ -2,6 +2,18 @@
 (function () {
   const { CFG, auth, db, fmtN, esc, unitIds } = window.CODEV;
   const fmtDate = (d) => { if (!d) return ''; const t = Date.parse(d); if (isNaN(t)) return d; return new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); };
+
+  // ---- Assurance & verification documents ----
+  const DOC_STATUS_LABEL = { awaiting: 'Awaiting submission', under_review: 'Under review', cleared: 'Verified', rejected: 'Action required' };
+  const docStatusBadge = (st) => { const c = st === 'cleared' ? 'verified' : st === 'under_review' ? 'pending' : st === 'rejected' ? 'rejected' : 'role'; return `<span class="badge ${c}">${esc(DOC_STATUS_LABEL[st] || 'Awaiting submission')}</span>`; };
+  // Merge the required-doc template with whatever exists (by key), keeping any extra docs too.
+  function mergeReqDocs(list, kf) {
+    const m = {}; (list || []).forEach(d => { m[d[kf]] = d; });
+    const rows = (CFG.REQUIRED_DOCS || []).map(t => ({ key: t.key, label: t.label, doc: m[t.key] || null }));
+    (list || []).forEach(d => { if (!(CFG.REQUIRED_DOCS || []).some(t => t.key === d[kf])) rows.push({ key: d[kf], label: d.doc_label || d.label || d[kf], doc: d }); });
+    return rows;
+  }
+  function fileToDataURL(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('Could not read file')); r.readAsDataURL(file); }); }
   const app = document.getElementById('app');
   const $ = (s, r = document) => r.querySelector(s);
 
@@ -218,7 +230,7 @@
         <div class="center" style="margin-top:24px"><a class="btn" href="#/opportunities">View all opportunities →</a></div></section>
       ${modelSection()}${trustSection()}${ctaSection()}`; },
     opportunities(opps) { _opps = opps; return sec('All opportunities', 'Every listing here has been verified by our admin team. Filter by location or search as new developments are listed.', `${oppFilterBar(opps)}<div id="oppGrid">${oppGridHtml(opps)}</div>`); },
-    opp(p) { if (!p) return sec('Not available', '', empty('This development is not available.'));
+    opp(p, dstat) { if (!p) return sec('Not available', '', empty('This development is not available.'));
       const ms = p.milestones || []; const pays = p.payments || []; _lb = p.images || [];
       return `<section class="wrap" style="padding:36px 22px"><a class="small muted" href="#/opportunities">← All opportunities</a>
         <div class="grid g2" style="margin-top:14px;align-items:start">
@@ -241,6 +253,9 @@
               ${(p.units === 0 || p.units) ? `<div><div class="tiny muted">Number of units</div><div style="font-weight:700;color:var(--navy)">${esc(String(p.units))}</div></div>` : ''}
               ${p.deliveryDate ? `<div><div class="tiny muted">Proposed delivery</div><div style="font-weight:700;color:var(--navy)">${esc(fmtDate(p.deliveryDate))}</div></div>` : ''}
             </div>
+            <div class="card pad" style="margin-top:14px"><div class="spread" style="margin-bottom:8px"><h3 style="margin:0;font-size:15px">Verification &amp; assurance</h3>${legalBadgeHtml(p) || '<span class="tiny muted">CoDev legal due diligence</span>'}</div>
+              <table style="font-size:13px;width:100%"><tbody>${mergeReqDocs(dstat || [], 'doc_key').map(r => { const st = (r.doc && r.doc.status) || 'awaiting'; return `<tr><td>${esc(r.label)}</td><td style="text-align:right;white-space:nowrap">${docStatusBadge(st)}</td></tr>`; }).join('')}</tbody></table>
+              <div class="tiny muted" style="margin-top:8px">Key project documents are reviewed by CoDev's legal partner. Underlying documents can be requested during investor qualification.</div></div>
             ${(p.ref && (p.units === 0 || p.units)) ? `<details class="card pad" style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;color:var(--navy)">Unit register — ${unitIds(p.ref, p.units).length} unit${unitIds(p.ref, p.units).length === 1 ? '' : 's'} <span class="tiny muted">· each tagged ${esc(p.ref)}</span></summary>
               <div style="max-height:200px;overflow:auto;font-family:monospace;font-size:12px;line-height:1.9;margin-top:8px">${unitIds(p.ref, p.units).map(u => esc(u)).join('<br>')}</div></details>` : ''}
             ${pays.length ? `<div class="card pad" style="margin-top:14px"><h3 style="margin:0 0 8px;font-size:15px">Payments &amp; capital calls</h3>
@@ -278,9 +293,39 @@
     account(u, mine) { return portalHead('Your account', u) + sec('', '', `<div class="grid g2" style="align-items:start">
       <div class="card pad"><h3 style="margin:0 0 10px;font-size:17px">Profile</h3><p class="small"><b>${esc(u.name)}</b><br><span class="muted">${esc(u.email)}</span><br><span class="badge role" style="margin-top:6px">${u.role}</span></p><button class="btn danger sm" style="margin-top:10px" onclick="CODEVAPP.logout()">Log out</button></div>
       <div><div class="spread"><h3 style="font-size:17px">Your listings</h3><a class="btn sm" href="#/list">+ List</a></div><div id="mySubs">${listCards(mine)}</div></div></div>`); },
+    docs(u, p, docs) {
+      if (!p) return sec('Not found', '', empty('Listing not found.'));
+      const isOwner = u && p.submittedBy && u.email && String(p.submittedBy).toLowerCase() === String(u.email).toLowerCase();
+      const back = u && u.role === 'developer' ? '#/developer' : '#/account';
+      if (!isOwner) return sec('', '', `<a class="small muted" href="${back}">← Back</a>${empty('You can only manage documents for your own listings.')}`);
+      const rows = mergeReqDocs(docs, 'key');
+      return sec('', '', `<a class="small muted" href="${back}">← Back to my listings</a>
+        <h1 style="font-size:26px;margin:8px 0 2px">${esc(p.title)} — assurance documents</h1>
+        <div class="muted" style="margin-bottom:2px">${p.ref ? 'Ref ' + esc(p.ref) + ' · ' : ''}Submit each required document for CoDev legal review &amp; due diligence.</div>
+        <div class="tiny muted" style="margin-bottom:14px">Buyers see only the verification <b>status</b> of each document — never your files. Files are visible only to you and CoDev's legal/verification team.</div>
+        <div id="docList" class="grid" style="gap:10px">${rows.map(r => docRowDev(p.id, r)).join('')}</div>`);
+    },
   };
   function listCards(mine) { if (!mine || !mine.length) return `<div class="card pad small muted">No submissions yet. <a href="#/list">List a property →</a></div>`;
-    return `<div class="grid" style="gap:10px">${mine.map(p => `<div class="card pad spread"><div class="row" style="gap:11px;align-items:center">${p.images && p.images[0] ? `<img src="${p.images[0]}" alt="" style="width:48px;height:48px;border-radius:9px;object-fit:cover;flex:none">` : ''}<div><b>${esc(p.title)}</b><div class="tiny muted">${esc(p.location)} · ${fmtN(p.priceFrom)} · funded ${funded(p)}%</div></div></div><span class="badge ${p.status}">${p.status}</span></div>`).join('')}</div>`; }
+    return `<div class="grid" style="gap:10px">${mine.map(p => `<div class="card pad"><div class="spread"><div class="row" style="gap:11px;align-items:center">${p.images && p.images[0] ? `<img src="${p.images[0]}" alt="" style="width:48px;height:48px;border-radius:9px;object-fit:cover;flex:none">` : ''}<div><b>${esc(p.title)}</b>${p.ref ? ` <span class="tiny" style="font-family:monospace;color:var(--ink2)">${esc(p.ref)}</span>` : ''}<div class="tiny muted">${esc(p.location)} · ${fmtN(p.priceFrom)} · funded ${funded(p)}%</div></div></div><span class="badge ${p.status}">${p.status}</span></div>
+      <div class="row" style="gap:8px;margin-top:10px"><a class="btn ghost sm" href="#/docs/${p.id}">📄 Assurance documents</a></div></div>`).join('')}</div>`; }
+  function docRowDev(pid, r) { const d = r.doc || {}; const st = d.status || 'awaiting';
+    return `<div class="card pad">
+      <div class="spread"><b>${esc(r.label)}</b>${docStatusBadge(st)}</div>
+      ${d.fileName ? `<div class="tiny muted" style="margin-top:5px">📎 ${esc(d.fileName)}${d.fileData ? ` · <a href="${d.fileData}" download="${esc(d.fileName)}">download</a>` : ''}${d.submittedAt ? ' · submitted ' + esc(fmtDate(d.submittedAt)) : ''}</div>` : ''}
+      ${d.note ? `<div class="tiny" style="color:#b4232a;margin-top:5px">Reviewer note: ${esc(d.note)}</div>` : ''}
+      <label class="photo-drop" style="margin-top:9px"><input type="file" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.heic,.heif" onchange="CODEVAPP.submitDoc('${pid}','${esc(r.key)}',this)"><span class="pd-inner">📤 ${d.fileName ? 'Replace document' : 'Upload document'} — PDF or image, max 6MB</span></label>
+    </div>`; }
+  async function submitDoc(pid, key, input) { const f = input.files && input.files[0]; input.value = ''; if (!f) return;
+    if (f.size > 6 * 1024 * 1024) { toast('File too large — max 6MB'); return; }
+    const label = ((CFG.REQUIRED_DOCS || []).find(t => t.key === key) || {}).label || key;
+    toast('Uploading…');
+    try { const dataUrl = await fileToDataURL(f);
+      await db.documents.submit(pid, { key, label, fileData: dataUrl, fileName: f.name, fileType: f.type });
+      toast('Submitted for review');
+      const docs = await db.documents.listForProperty(pid); const box = document.getElementById('docList');
+      if (box) box.innerHTML = mergeReqDocs(docs, 'key').map(r => docRowDev(pid, r)).join('');
+    } catch (e) { toast((e && e.message) || 'Upload failed'); } }
   function portalHead(t, u) { return `<section class="hero"><div class="wrap" style="padding:26px 22px"><span class="eyebrow">${u.role} · ${esc(u.email)}</span><h1 style="font-size:28px;margin:6px 0 0">${t}</h1></div></section>`; }
   function sec(t, sub, body) { return `<section class="wrap" style="padding:${t ? '40' : '24'}px 22px">${t ? `<span class="eyebrow">CoDev</span><h2 style="margin:4px 0 ${sub ? '4' : '18'}px;font-size:27px">${t}</h2>` : ''}${sub ? `<p class="muted" style="margin:0 0 22px;max-width:60ch">${sub}</p>` : ''}${body}</section>`; }
   const empty = (m) => `<div class="card pad center muted" style="grid-column:1/-1">${m}</div>`;
@@ -497,7 +542,7 @@
   // ---- router (async) ----
   async function route() {
     const h = (location.hash || '#/').slice(2); const [path, arg] = h.split('/');
-    const gated = ['list', 'investor', 'developer', 'account'];
+    const gated = ['list', 'investor', 'developer', 'account', 'docs'];
     if (gated.includes(path) && !requireLogin(() => route())) { app.innerHTML = sec('Sign in required', 'Please sign in to continue.', ''); return; }
     if (gated.includes(path) && mfaGate()) { app.innerHTML = sec('Two-factor required', 'Complete two-factor authentication to continue.', ''); return; }
     // Admin-verification gate: a signed-in account holder cannot operate, list or view until approved.
@@ -507,7 +552,8 @@
       const u = me();
       if (path === '' || path === undefined) { const opps = await db.properties.listPublic(); let devs = 0, inv = 0; try { const accs = CFG.configured ? await db.profiles.listAll() : []; devs = accs.filter(a => a.role === 'developer').length; inv = accs.filter(a => a.role === 'investor').length; } catch {} app.innerHTML = V.home(opps, { opps: opps.length, devs: devs || '—', investors: inv || '—' }); }
       else if (path === 'opportunities') app.innerHTML = V.opportunities(await db.properties.listPublic());
-      else if (path === 'opp') app.innerHTML = V.opp(await db.properties.byId(arg));
+      else if (path === 'opp') { const p = await db.properties.byId(arg); const dstat = p ? await db.documents.statusForProperty(arg) : []; app.innerHTML = V.opp(p, dstat); }
+      else if (path === 'docs') { const p = await db.properties.byId(arg); const docs = p ? await db.documents.listForProperty(arg) : []; app.innerHTML = V.docs(u, p, docs); }
       else if (path === 'how') app.innerHTML = V.how();
       else if (path === 'list') app.innerHTML = V.list(u, await db.properties.listMine());
       else if (path === 'investor') app.innerHTML = V.investor(u, await db.properties.listPublic());
@@ -519,7 +565,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
   // Session timeout → clean logout + re-login prompt (fired by the data layer on an expired JWT).
   window.addEventListener('codev:session-expired', () => {
     renderAuthArea();

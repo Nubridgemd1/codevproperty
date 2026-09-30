@@ -4,14 +4,14 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CoDev — Admin Console</title>
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=5" />
-<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=5" />
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=5" />
-<link rel="shortcut icon" href="favicon-32.png?v=5" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=6" />
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=6" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=6" />
+<link rel="shortcut icon" href="favicon-32.png?v=6" />
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=5" />
+<link rel="stylesheet" href="styles.css?v=6" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -50,12 +50,12 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=5"></script>
+<script src="data.js?v=6"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
   const $ = (s)=>document.querySelector(s);
-  let curTab='properties'; let PROPS=[], ACCS=[]; let FX=null;
+  let curTab='properties'; let PROPS=[], ACCS=[], DOCS=[]; let FX=null;
   const toast=(m)=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2800);};
 
   // ---------- role-based access control ----------
@@ -64,6 +64,11 @@
   function myPerms(){ const p=myProfile()||{}; if(String(p.email||'').toLowerCase()===String(CFG.ADMIN_EMAIL||'').toLowerCase()) return ALLP.slice();
     const perms=Array.isArray(p.permissions)?p.permissions:[]; if(p.role==='admin' && perms.length===0) return ALLP.slice(); /* legacy admin = full */ return perms; }
   const can = (k)=> myPerms().indexOf(k)>=0;
+  // Console access = full admin OR a legal-review partner. Full admins get every tab; a
+  // legal partner (role 'legal' / permission 'legal_review') sees only the Legal review tab.
+  const isFullAdmin = ()=> (myProfile()||{}).role==='admin';
+  const canLegal = ()=> isFullAdmin() || (myProfile()||{}).role==='legal' || can('legal_review');
+  const hasConsoleAccess = (p)=>{ p=p||myProfile()||{}; const perms=Array.isArray(p.permissions)?p.permissions:[]; return p.role==='admin' || p.role==='legal' || perms.indexOf('legal_review')>=0; };
   const permLabel = (k)=>{ const f=PERMS.find(x=>x[0]===k); return f?f[1]:k; };
   const isMe = (a)=>{ const p=myProfile()||{}; return a && (a.id===p.id || (a.email && p.email && a.email.toLowerCase()===p.email.toLowerCase())); };
 
@@ -99,7 +104,7 @@
     return false; }
   async function forgotReset(e,email){ e.preventDefault(); const code=$('#rCode').value.trim(); const password=$('#rPass').value; const btn=$('#rBtn'); btn.disabled=true; btn.textContent='Updating…';
     try{ await auth.resetPassword({email, code, password}); await auth.refreshProfile(); const p=auth.profile();
-      if(!p || p.role!=='admin'){ await auth.signOut(); toast('That account is not an admin'); renderGate(); return false; }
+      if(!hasConsoleAccess(p)){ await auth.signOut(); toast('That account has no console access'); renderGate(); return false; }
       toast('Password updated'); await show();
     }catch(err){ toast(err.message||'Invalid or expired code'); btn.disabled=false; btn.textContent='Update password & enter'; }
     return false; }
@@ -108,7 +113,7 @@
       if(CFG.configured){
         await auth.signIn({email:$('#aEmail').value.trim(), password:$('#aPass').value});
         await auth.refreshProfile(); const p=auth.profile();
-        if(!p || p.role!=='admin'){ await auth.signOut(); toast('That account is not an admin'); btn.disabled=false; btn.textContent='Unlock console'; return false; }
+        if(!hasConsoleAccess(p)){ await auth.signOut(); toast('That account has no console access'); btn.disabled=false; btn.textContent='Unlock console'; return false; }
       } else {
         if($('#aPass').value!==(CFG.ADMIN_PASSCODE||'admin2026')){ toast('Incorrect passcode'); btn.disabled=false; btn.textContent='Unlock console'; return false; }
         sessionStorage.setItem('codev_admin','1');
@@ -121,23 +126,29 @@
 
   async function show(){
     $('#gate').classList.add('hide'); $('#console').classList.remove('hide');
-    if(CFG.configured){ const p=auth.profile(); $('#who').textContent=(p&&p.name?p.name:'Admin')+' · admin'; } else $('#who').textContent='Admin';
+    if(CFG.configured){ const p=auth.profile(); $('#who').textContent=(p&&p.name?p.name:'Admin')+' · '+((p&&p.role)||'admin'); } else $('#who').textContent='Admin';
     await load();
   }
   async function load(){
     $('#panel').innerHTML='<div class="card pad muted">Loading…</div>';
     try{ PROPS=await db.properties.listAll(); ACCS=CFG.configured?await db.profiles.listAll():await db.profiles.listAll(); }
     catch(err){ toast(err.message||'Load failed'); }
+    try{ DOCS=await db.documents.listAll(); }catch(e){ DOCS=[]; } // best-effort; legal tab re-checks & shows a setup hint if the table is missing
     try{ FX=await db.settings.getFx(); }catch(e){ FX=CFG.FX_DEFAULT; } if(!FX) FX=CFG.FX_DEFAULT;
     renderStats(); tab(curTab);
   }
   function renderStats(){ const pendAcc=ACCS.filter(a=>a.role!=='admin'&&['pending','under_review',''].includes(String(a.status||'').toLowerCase())).length; const st=[['Accounts awaiting approval',pendAcc],['Properties pending',PROPS.filter(p=>p.status==='pending').length],['Accounts',ACCS.length],['Verified live',PROPS.filter(p=>p.status==='verified').length]];
     $('#stats').innerHTML=st.map(s=>`<div class="stat"><div class="n">${s[1]}</div><div class="l">${s[0]}</div></div>`).join(''); }
-  function renderTabs(){ const tabs=[['properties','Developments'],['investors','Investors'],['accounts','Accounts']]; if(can('manage_admins')) tabs.push(['admins','Admins &amp; roles']);
-    if(!tabs.some(x=>x[0]===curTab)) curTab='properties';
+  function renderTabs(){ const tabs=[];
+    if(isFullAdmin()){ tabs.push(['properties','Developments']); }
+    if(canLegal()){ tabs.push(['legal','Legal review']); }
+    if(isFullAdmin()){ tabs.push(['investors','Investors'],['accounts','Accounts']); if(can('manage_admins')) tabs.push(['admins','Admins &amp; roles']); }
+    if(!tabs.length) tabs.push(['legal','Legal review']);
+    if(!tabs.some(x=>x[0]===curTab)) curTab=tabs[0][0];
     const bar=document.querySelector('.tabs'); if(bar) bar.innerHTML=tabs.map(t=>`<button class="tab ${t[0]===curTab?'active':''}" data-t="${t[0]}" onclick="ADMIN.tab('${t[0]}')">${t[1]}</button>`).join(''); }
   function tab(t){ curTab=t; renderTabs();
     if(t==='investors'){ $('#panel').innerHTML='<div class="card pad muted">Loading investor pipeline…</div>'; loadInvestors(); return; }
+    if(t==='legal'){ loadLegal(); return; }
     $('#panel').innerHTML = t==='admins'?adminsPanel():(t==='accounts'?accountsPanel():propertiesPanel()); }
 
   // ---------- INVESTOR PIPELINE (qualification → CoDev verification) ----------
@@ -194,11 +205,38 @@
 
   // ---------- PROPERTIES ----------
   function fundedPct(p){ return (p.milestones||[]).filter(m=>m.status==='certified').reduce((n,m)=>n+(Number(m.pct)||0),0); }
+  // ---------- LEGAL REVIEW (assurance & due diligence) ----------
+  const DOC_LBL=(s)=>{ const f=(CFG.DOC_STATUSES||[]).find(x=>x[0]===s); return f?f[1]:'Awaiting submission'; };
+  const docBadge=(s)=>{ const c=s==='cleared'?'verified':s==='under_review'?'pending':s==='rejected'?'rejected':'role'; return `<span class="badge ${c}">${esc(DOC_LBL(s))}</span>`; };
+  function mergeDocsAdmin(list){ const m={}; (list||[]).forEach(d=>{m[d.key]=d;}); const rows=(CFG.REQUIRED_DOCS||[]).map(t=>({key:t.key,label:t.label,doc:m[t.key]||null})); (list||[]).forEach(d=>{ if(!(CFG.REQUIRED_DOCS||[]).some(t=>t.key===d.key)) rows.push({key:d.key,label:d.label||d.key,doc:d}); }); return rows; }
+  function docSummaryChip(list){ const req=(CFG.REQUIRED_DOCS||[]).length; const cl=(list||[]).filter(d=>d.status==='cleared').length; const ur=(list||[]).filter(d=>d.status==='under_review').length; const rj=(list||[]).filter(d=>d.status==='rejected').length; return `<span class="tiny muted">Docs ${cl}/${req} verified${ur?` · ${ur} under review`:''}${rj?` · ${rj} action`:''}</span>`; }
+  async function loadLegal(){ $('#panel').innerHTML='<div class="card pad muted">Loading documents…</div>';
+    try{ DOCS=await db.documents.listAll(); }
+    catch(e){ if(/listing_documents|relation|does not exist|42P01|schema cache|\(40[0-4]\)/i.test((e&&e.message)||'')){ $('#panel').innerHTML='<div class="card pad"><b>Document review needs a one-time backend setup.</b><p class="small muted" style="margin:8px 0 0">Run <code>DOCUMENTS.sql</code> in the Supabase SQL editor, then reload this page.</p></div>'; return; } DOCS=[]; }
+    $('#panel').innerHTML=legalPanel(); }
+  function legalPanel(){
+    const byProp={}; DOCS.forEach(d=>{ (byProp[d.propertyId]=byProp[d.propertyId]||[]).push(d); });
+    const cards=(PROPS||[]).map(p=>{ const list=byProp[p.id]||[]; const rows=mergeDocsAdmin(list).map(r=>legalDocRow(p,r)).join('');
+      return `<div class="card pad" style="margin-bottom:14px"><div class="spread"><div><b>${esc(p.title)}</b>${p.ref?` <span class="badge role" style="font-family:monospace">${esc(p.ref)}</span>`:''}<div class="tiny muted">${esc(p.developer||'')} · ${esc(p.location||'')} · <span class="badge ${p.status}">${p.status}</span></div></div>${docSummaryChip(list)}</div>
+      <div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Document</th><th>File</th><th>Decision</th><th>Note</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    }).join('');
+    return `<div class="card pad" style="margin-bottom:16px"><b>Legal review &amp; due diligence</b><p class="tiny muted" style="margin:6px 0 0">Review each listing's key documents and set a verification decision. Buyers see the status on the listing; files are visible only to legal &amp; admins. Admins can publish a listing even while documents are awaiting or under review.</p></div>${cards||'<div class="card pad muted">No listings yet.</div>'}`;
+  }
+  function legalDocRow(p,r){ const d=r.doc; const st=d?d.status:'awaiting';
+    if(!d) return `<tr><td>${esc(r.label)}</td><td class="tiny muted">—</td><td>${docBadge('awaiting')}</td><td class="tiny muted">Awaiting developer submission</td><td></td></tr>`;
+    const file=d.fileData?`<a class="btn ghost sm" href="${d.fileData}" target="_blank" rel="noopener" download="${esc(d.fileName||'document')}">📎 View</a>`:'<span class="tiny muted">—</span>';
+    const sel=`<select id="ds_${d.id}">${(CFG.DOC_STATUSES||[]).filter(x=>x[0]!=='awaiting').map(x=>`<option value="${x[0]}" ${x[0]===st?'selected':''}>${x[1]}</option>`).join('')}</select>`;
+    const note=`<input id="dn_${d.id}" value="${esc(d.note||'')}" placeholder="Reason / note" style="min-width:150px">`;
+    return `<tr><td>${esc(r.label)}${d.fileName?`<div class="tiny muted">${esc(d.fileName)}</div>`:''}</td><td>${file}</td><td>${sel}</td><td>${note}</td><td style="text-align:right"><button class="btn sm navy" onclick="ADMIN.reviewDoc('${d.id}')">Save</button></td></tr>`;
+  }
+  async function reviewDoc(id){ const s=document.getElementById('ds_'+id), n=document.getElementById('dn_'+id); if(!s) return; const status=s.value, note=(n&&n.value.trim())||'';
+    try{ await db.documents.review(id,{status,note}); toast('Document '+(status==='cleared'?'verified':status==='rejected'?'flagged':'updated')); await loadLegal(); }catch(e){ toast(e.message||'Save failed'); } }
+
   function adminPropLocations(){ const s=new Set(); PROPS.forEach(p=>{ const l=(p.location||'').trim(); if(l) s.add(l); }); return Array.from(s).sort((a,b)=>a.localeCompare(b)); }
   function propRowsHtml(list){
     const canL=can('manage_listings');
     return (list||[]).map(p=>`<tr>
-      <td><b>${esc(p.title)}</b>${p.ref?` <span class="badge role" style="font-family:monospace">${esc(p.ref)}</span>`:''}<div class="tiny muted">${esc(p.location)} · funded ${fundedPct(p)}%</div></td>
+      <td><b>${esc(p.title)}</b>${p.ref?` <span class="badge role" style="font-family:monospace">${esc(p.ref)}</span>`:''}<div class="tiny muted">${esc(p.location)} · funded ${fundedPct(p)}%</div><div>${docSummaryChip((DOCS||[]).filter(d=>d.propertyId===p.id))}</div></td>
       <td>${esc(p.developer||'')}<div class="tiny muted">${esc(p.submittedBy||'')} · <span class="badge role">${p.submittedByRole||'—'}</span></div></td>
       <td>${fmtN(p.priceFrom)}<div class="tiny muted">${esc(p.stage||'')}</div></td>
       <td><span class="badge ${p.status}">${p.status}</span></td>
@@ -264,6 +302,8 @@
         <div class="field" style="flex:1"><label>Status</label><select name="status">${['pending','verified','rejected'].map(x=>`<option ${x===p.status?'selected':''}>${x}</option>`).join('')}</select></div></div>
       <div class="field"><label>Legal review status <span class="tiny muted">— shows a “CoDev Legal Verified” badge publicly only when Cleared / Conditionally cleared</span></label>
         <select name="legalStatus">${[['not_submitted','Not submitted'],['under_review','Under review'],['information_required','Information required'],['conditionally_cleared','Conditionally cleared'],['cleared','Cleared'],['material_issue','Material issue'],['rejected','Rejected / withdrawn']].map(o=>`<option value="${o[0]}" ${o[0]===(p.legalStatus||'not_submitted')?'selected':''}>${o[1]}</option>`).join('')}</select></div>
+      <div class="field"><label>Assurance documents <span class="tiny muted">— reviewed on the Legal review tab. You can publish this listing regardless of document status.</span></label>
+        <div class="card pad" style="background:var(--soft)">${mergeDocsAdmin((DOCS||[]).filter(d=>d.propertyId===p.id)).map(r=>{const st=r.doc?r.doc.status:'awaiting';return `<div class="spread" style="padding:3px 0"><span class="small">${esc(r.label)}</span>${docBadge(st)}</div>`;}).join('')}</div></div>
 
       <div class="spread" style="margin:6px 0 4px"><label style="margin:0">Milestones &amp; timeline</label><button type="button" class="btn sm" onclick="ADMIN.addMs()">+ Milestone</button></div>
       <div style="overflow-x:auto"><table><thead><tr><th>Milestone</th><th>%</th><th>Target date</th><th>Status</th><th></th></tr></thead><tbody id="msRows"></tbody></table></div>
@@ -351,10 +391,10 @@
         <div class="field" style="flex:1;min-width:120px"><label>GBP per $1 (${esc(cs.GBP||'£')})</label><input name="GBP" type="number" step="0.0001" min="0" value="${esc(String(fx.GBP||0.79))}" required></div>
         <div class="field" style="flex:0 0 auto"><button class="btn primary" id="fxBtn">Save rates</button></div>
       </div><p class="tiny muted" style="margin:2px 0 0">Example: at ₦${esc(Number(fx.NGN||1600).toLocaleString())}/$, the “Under $25,000” band shows as “Under ₦${esc(Math.round(25000*(fx.NGN||1600)).toLocaleString())}”.</p></form></div>`;
-    const admins=ACCS.filter(a=>a.role==='admin');
-    const rows=admins.map(a=>{ const eff=(Array.isArray(a.permissions)&&a.permissions.length)?a.permissions:ALLP; const primary=String(a.email||'').toLowerCase()===String(CFG.ADMIN_EMAIL||'').toLowerCase();
+    const admins=ACCS.filter(a=>a.role==='admin'||a.role==='legal');
+    const rows=admins.map(a=>{ const eff=(Array.isArray(a.permissions)&&a.permissions.length)?a.permissions:(a.role==='legal'?['legal_review']:ALLP); const primary=String(a.email||'').toLowerCase()===String(CFG.ADMIN_EMAIL||'').toLowerCase();
       return `<tr>
-        <td><b>${esc(a.name||'—')}</b>${primary?' <span class="badge role" style="background:#e9dfc7;color:#8a6113">primary</span>':''}${isMe(a)?' <span class="tiny muted">(you)</span>':''}<div class="tiny muted">${esc(a.email||'')}</div></td>
+        <td><b>${esc(a.name||'—')}</b>${a.role==='legal'?' <span class="badge role">legal partner</span>':''}${primary?' <span class="badge role" style="background:#e9dfc7;color:#8a6113">primary</span>':''}${isMe(a)?' <span class="tiny muted">(you)</span>':''}<div class="tiny muted">${esc(a.email||'')}</div></td>
         <td>${permChips(eff)}</td>
         <td style="white-space:nowrap;text-align:right">
           <button class="btn sm navy" onclick="ADMIN.editRights('${a.id}')">Edit rights</button>
@@ -382,25 +422,30 @@
         <div id="admNew" class="hide"><div class="field"><label>Full name</label><input name="nname"></div>
           <div class="field"><label>Email</label><input name="nemail" type="email"></div>
           <div class="field"><label>Temp password</label><input name="npass" value="Codev1234!" minlength="6"></div></div>
-        <label style="margin-top:6px;display:block">Rights</label>${permCheckboxes(['verify_accounts'])}
-        <button class="btn primary" style="width:100%;margin-top:14px">Add admin</button></form>`;
+        <div class="field" style="margin-top:6px"><label>Access level</label><select name="accessLevel" onchange="ADMIN.admAccess(this.value)"><option value="admin">Admin</option><option value="legal">Legal partner — document review &amp; due diligence only</option></select></div>
+        <div id="rightsWrap"><label style="margin-top:6px;display:block">Rights</label>${permCheckboxes(['verify_accounts'])}</div>
+        <p id="legalNote" class="tiny muted hide" style="margin-top:6px">A legal partner signs in to this console and sees only the <b>Legal review</b> dashboard — every listing's documents, for verification &amp; due diligence.</p>
+        <button class="btn primary" style="width:100%;margin-top:14px">Add</button></form>`;
     admMode='prom'; $('#modal').classList.add('show'); }
   let admMode='prom';
   function admTab(m){ admMode=m; document.getElementById('tabProm').classList.toggle('active',m==='prom'); document.getElementById('tabNew').classList.toggle('active',m==='new'); document.getElementById('admProm').classList.toggle('hide',m!=='prom'); document.getElementById('admNew').classList.toggle('hide',m!=='new'); }
-  async function saveAdmin(e){ e.preventDefault(); const f=e.target; let perms=readPerms(); if(!perms.length) perms=['view'];
+  function admAccess(v){ const legal=v==='legal'; const rw=document.getElementById('rightsWrap'); const ln=document.getElementById('legalNote'); if(rw) rw.classList.toggle('hide',legal); if(ln) ln.classList.toggle('hide',!legal); }
+  async function saveAdmin(e){ e.preventDefault(); const f=e.target;
+    const level=(f.accessLevel&&f.accessLevel.value)||'admin'; const role=level==='legal'?'legal':'admin';
+    let perms=level==='legal'?['legal_review']:readPerms(); if(!perms.length) perms=['view'];
     try{
       if(admMode==='prom'){ const email=(f.pemail.value||'').trim().toLowerCase(); if(!email){toast('Enter the member email');return false;}
-        const a=ACCS.find(x=>String(x.email||'').toLowerCase()===email); if(!a){ toast('No account with that email — create a new admin instead'); return false; }
-        await db.profiles.update(a.id,{ role:'admin', status:'approved', permissions:perms });
-        closeModal(); toast('Admin added'); await load();
+        const a=ACCS.find(x=>String(x.email||'').toLowerCase()===email); if(!a){ toast('No account with that email — create a new account instead'); return false; }
+        await db.profiles.update(a.id,{ role, status:'approved', permissions:perms });
+        closeModal(); toast(level==='legal'?'Legal partner added':'Admin added'); await load();
       } else {
         const name=(f.nname.value||'').trim(), email=(f.nemail.value||'').trim(), pass=f.npass.value;
         if(!name||!email||!pass){toast('Complete name, email and password');return false;}
-        const d=await db.profiles.add({name,email,role:'admin',password:pass}); const newId=d&&d.user&&d.user.id;
-        if(newId && CFG.configured){ try{ await db.profiles.update(newId,{ role:'admin', name, status:'approved', permissions:perms }); }catch{} }
-        closeModal(); toast('Admin created'); await load();
+        const d=await db.profiles.add({name,email,role,password:pass}); const newId=d&&d.user&&d.user.id;
+        if(newId && CFG.configured){ try{ await db.profiles.update(newId,{ role, name, status:'approved', permissions:perms }); }catch{} }
+        closeModal(); toast(level==='legal'?'Legal partner created':'Admin created'); await load();
       }
-    }catch(err){ toast(err.message||'Could not add admin'); } return false; }
+    }catch(err){ toast(err.message||'Could not add account'); } return false; }
   function editRights(id){ const a=ACCS.find(x=>x.id===id); if(!a) return; const cur=(Array.isArray(a.permissions)&&a.permissions.length)?a.permissions:ALLP.slice();
     $('#mTitle').textContent='Edit rights: '+(a.name||a.email);
     $('#mBody').innerHTML=`<form onsubmit="return ADMIN.saveRights(event,'${id}')"><p class="small muted" style="margin:0 0 8px">Choose what this admin can do.</p>${permCheckboxes(cur)}
@@ -431,7 +476,7 @@
   async function delAcc(id){ const a=ACCS.find(x=>x.id===id); if(confirm('Delete account "'+(a.name||a.email)+'"?')){ try{ await db.profiles.remove(id); toast('Account deleted'); await load(); }catch(err){toast(err.message);} } }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,copyRef,delProp,editProp,saveProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+  window.ADMIN={login,lock,tab,setStatus,copyRef,reviewDoc,admAccess,delProp,editProp,saveProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
     addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps};
 
   // Session timeout in the admin console → message, then back to the sign-in gate.
@@ -439,7 +484,7 @@
 
   renderGate();
   // auto-resume
-  if(CFG.configured){ const p=auth.profile(); if(p&&p.role==='admin') show(); }
+  if(CFG.configured){ const p=auth.profile(); if(hasConsoleAccess(p)) show(); }
   else if(sessionStorage.getItem('codev_admin')==='1') show();
 })();
 </script>

@@ -26,6 +26,24 @@ window.CODEV = (function () {
     PROPERTY_TYPES: ['Residential — apartments', 'Residential — detached / terraced homes',
              'Mixed-use', 'Commercial', 'Retail', 'Office', 'Industrial / warehousing',
              'Serviced plots / land', 'Hospitality', 'Other'],
+    // Assurance & verification: key documents a developer submits per listing. Extensible —
+    // add rows here (key must be stable & unique). The legal partner reviews each on their
+    // dashboard; buyers see the verification status (not the files).
+    REQUIRED_DOCS: [
+      { key: 'title_co',        label: 'Title Ownership / C of O' },
+      { key: 'title_reg',       label: 'Title Registration / Perfection' },
+      { key: 'survey_reg',      label: 'Approved Survey Registration' },
+      { key: 'site_layout',     label: 'Site Layout' },
+      { key: 'approvals',       label: 'Approvals and Consents' },
+      { key: 'spv_jv',          label: 'SPV / JV Agreements' },
+    ],
+    // Document review lifecycle. 'awaiting' = not yet submitted by the developer.
+    DOC_STATUSES: [
+      ['awaiting',     'Awaiting submission'],
+      ['under_review', 'Under review'],
+      ['cleared',      'Verified / cleared'],
+      ['rejected',     'Action required'],
+    ],
     // Default milestone schedule (name + % of funding released). Admin can edit per development.
     MILESTONE_TEMPLATE: [
       { name: 'Commitment / SPV Entry', pct: 10 }, { name: 'Land / Commencement', pct: 15 },
@@ -46,12 +64,14 @@ window.CODEV = (function () {
       ['verify_accounts', 'Verify accounts',        'Approve, reject or suspend member accounts'],
       ['manage_listings', 'Manage developments',    'Verify, edit, reject & delete developments and milestones'],
       ['manage_accounts', 'Manage member accounts', 'Add members, change roles, delete accounts'],
+      ['legal_review',    'Legal review & due diligence', 'Review listing documents and set verification status'],
     ],
     ADMIN_PRESETS: {
-      'Super admin':      ['manage_admins', 'verify_accounts', 'manage_listings', 'manage_accounts'],
+      'Super admin':      ['manage_admins', 'verify_accounts', 'manage_listings', 'manage_accounts', 'legal_review'],
       'Verifier':         ['verify_accounts'],
       'Listings manager': ['manage_listings'],
       'Accounts manager': ['verify_accounts', 'manage_accounts'],
+      'Legal partner':    ['legal_review'],
     },
   };
   CFG.ALL_PERMISSIONS = CFG.PERMISSIONS.map(p => p[0]);
@@ -97,6 +117,11 @@ window.CODEV = (function () {
     submittedBy: r.submitted_by_email, submittedByRole: r.submitted_by_role, createdAt: r.created_at, verifiedAt: r.verified_at,
     milestones: Array.isArray(r.milestones) ? r.milestones : [], payments: Array.isArray(r.payments) ? r.payments : [],
     images: Array.isArray(r.images) ? r.images : [] });
+
+  const toDoc = (r) => ({ id: r.id, propertyId: r.property_id, key: r.doc_key, label: r.doc_label,
+    fileData: r.file_data || '', fileName: r.file_name || '', fileType: r.file_type || '',
+    status: r.status || 'awaiting', note: r.note || '',
+    submittedAt: r.submitted_at || null, reviewedAt: r.reviewed_at || null, reviewedBy: r.reviewed_by || null });
   const toAcc = (r) => ({ id: r.id, name: r.name, email: r.email, role: r.role, status: r.status, createdAt: r.created_at,
     permissions: Array.isArray(r.permissions) ? r.permissions : [],
     about: r.about || '', website: r.website || '', phone: r.phone || '', brochure: r.brochure || '' });
@@ -240,10 +265,36 @@ window.CODEV = (function () {
       async setFx(rates) { const body = { key: 'fx', value: rates, updated_at: nowISO() };
         return sb('/rest/v1/platform_settings?on_conflict=key', { method: 'POST', body, prefer: 'resolution=merge-duplicates,return=representation' }); },
     },
+    // ---- Assurance & verification documents (see DOCUMENTS.sql) ----
+    // Files live in listing_documents (RLS: owner + legal/admin only; anon denied → files
+    // never leak). Buyers read the file-free status via the listing_document_status view.
+    documents: {
+      // Full documents (incl. file_data) — owner / legal / admin, RLS-gated.
+      async listForProperty(propertyId) {
+        return (await sb('/rest/v1/listing_documents?property_id=eq.' + propertyId + '&order=doc_key&select=*')).map(toDoc); },
+      // Every listing's documents, for the legal-partner dashboard.
+      async listAll() { return (await sb('/rest/v1/listing_documents?order=property_id&select=*')).map(toDoc); },
+      // Public, file-free status checklist (security-definer view; anon-readable).
+      async statusForProperty(propertyId) {
+        try { return await sb('/rest/v1/listing_document_status?property_id=eq.' + propertyId + '&order=doc_key&select=*', { anon: true }); }
+        catch { return []; } },
+      // Developer submits / replaces a document (upsert on property_id + doc_key → under_review).
+      async submit(propertyId, doc) { const s = getSession();
+        const row = { property_id: propertyId, doc_key: doc.key, doc_label: doc.label,
+          file_data: doc.fileData || null, file_name: doc.fileName || null, file_type: doc.fileType || null,
+          status: 'under_review', note: null, submitted_by: s.user.id, submitted_at: nowISO(),
+          reviewed_by: null, reviewed_at: null };
+        return sb('/rest/v1/listing_documents?on_conflict=property_id,doc_key', { method: 'POST', body: row, prefer: 'resolution=merge-duplicates,return=representation' }); },
+      // Legal / admin sets a review decision.
+      async review(id, { status, note }) { const s = getSession();
+        const row = { status, note: note || null, reviewed_by: s.user.id, reviewed_at: nowISO() };
+        return sb('/rest/v1/listing_documents?id=eq.' + id, { method: 'PATCH', body: row, prefer: 'return=representation' }); },
+      async remove(id) { return sb('/rest/v1/listing_documents?id=eq.' + id, { method: 'DELETE' }); },
+    },
   };
 
   // ================= LOCAL FALLBACK MODE (no keys) =================
-  const L = { acc: 'codev_accounts', prop: 'codev_properties', sess: 'codev_session', seed: 'codev_seeded_v1' };
+  const L = { acc: 'codev_accounts', prop: 'codev_properties', sess: 'codev_session', seed: 'codev_seeded_v1', docs: 'codev_docs' };
   const rd = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
   const wr = (k, v) => localStorage.setItem(k, JSON.stringify(v));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -304,6 +355,20 @@ window.CODEV = (function () {
     settings: {
       async getFx() { return Object.assign({}, CFG.FX_DEFAULT, rd('codev_fx', {})); },
       async setFx(rates) { wr('codev_fx', rates); return rates; },
+    },
+    documents: {
+      async listForProperty(pid) { return rd(L.docs, []).filter(d => d.propertyId === pid); },
+      async listAll() { return rd(L.docs, []); },
+      async statusForProperty(pid) { return rd(L.docs, []).filter(d => d.propertyId === pid)
+        .map(d => ({ property_id: d.propertyId, doc_key: d.key, doc_label: d.label, status: d.status, reviewed_at: d.reviewedAt })); },
+      async submit(pid, doc) { const s = rd(L.sess, null); const list = rd(L.docs, []); const i = list.findIndex(d => d.propertyId === pid && d.key === doc.key);
+        const rec = { id: (i >= 0 ? list[i].id : uid()), propertyId: pid, key: doc.key, label: doc.label,
+          fileData: doc.fileData || '', fileName: doc.fileName || '', fileType: doc.fileType || '',
+          status: 'under_review', note: '', submittedBy: s && s.id, submittedAt: nowISO(), reviewedAt: null, reviewedBy: null };
+        if (i >= 0) list[i] = rec; else list.unshift(rec); wr(L.docs, list); return rec; },
+      async review(id, { status, note }) { const list = rd(L.docs, []); const i = list.findIndex(d => d.id === id); if (i < 0) return;
+        list[i] = { ...list[i], status, note: note || '', reviewedAt: nowISO(), reviewedBy: (rd(L.sess, null) || {}).id }; wr(L.docs, list); return list[i]; },
+      async remove(id) { wr(L.docs, rd(L.docs, []).filter(d => d.id !== id)); },
     },
   };
 
