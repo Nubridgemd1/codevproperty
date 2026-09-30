@@ -1,6 +1,7 @@
 /* CoDev — public site, auth (Supabase or local), role portals, property submission */
 (function () {
-  const { CFG, auth, db, fmtN, esc } = window.CODEV;
+  const { CFG, auth, db, fmtN, esc, unitIds } = window.CODEV;
+  const fmtDate = (d) => { if (!d) return ''; const t = Date.parse(d); if (isNaN(t)) return d; return new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); };
   const app = document.getElementById('app');
   const $ = (s, r = document) => r.querySelector(s);
 
@@ -162,6 +163,8 @@
     <div class="ph"${p.images && p.images[0] ? ' data-cover="1"' : ''} style="${coverBg(p)}"><span class="vb badge verified">✓ Verified</span><span class="loc">📍 ${esc(p.location)}</span></div>
     <div style="padding:16px"><div class="small muted" style="font-weight:600">${esc(p.developer)}</div>
       <h3 style="margin:2px 0 6px;font-size:19px">${esc(p.title)}</h3>
+      ${p.ref ? `<div class="tiny" style="font-family:monospace;color:var(--ink2);margin:0 0 4px">${esc(p.ref)}</div>` : ''}
+      ${(p.propertyType || p.units === 0 || p.units) ? `<div class="tiny muted" style="margin:0 0 6px">${[p.propertyType ? esc(p.propertyType) : '', (p.units === 0 || p.units) ? esc(String(p.units)) + ' units' : ''].filter(Boolean).join(' · ')}</div>` : ''}
       ${legalVerified(p) ? `<div style="margin:0 0 7px">${legalBadgeHtml(p)}</div>` : ''}
       <p class="small muted" style="min-height:38px">${esc(p.summary)}</p>
       ${fundingBar(p)}
@@ -227,9 +230,19 @@
               ${ms.map(m => `<tr><td>${esc(m.name)}</td><td>${m.pct}%</td><td class="tiny muted">${esc(m.targetDate || '—')}</td><td><span class="badge ${m.status === 'certified' ? 'verified' : m.status === 'in-progress' ? 'pending' : 'role'}">${esc(m.status)}</span></td></tr>`).join('') || `<tr><td colspan="4" class="muted tiny">No milestones set.</td></tr>`}
               </tbody></table></div></div>
           <div><span class="badge verified">✓ Verified</span> ${legalBadgeHtml(p)}<h1 style="font-size:30px;margin:10px 0 4px">${esc(p.title)}</h1>
-            <div class="muted">${esc(p.developer)} · 📍 ${esc(p.location)}</div><p style="margin:16px 0">${esc(p.summary)}</p>
-            <div class="card pad grid g2" style="gap:12px"><div><div class="tiny muted">Participation from</div><div class="serif" style="font-size:22px;color:var(--bronze)">${fmtN(p.priceFrom)}</div></div>
-              <div><div class="tiny muted">Current stage</div><div style="font-weight:700;color:var(--navy)">${esc(p.stage)}</div></div></div>
+            ${p.ref ? `<div class="tiny" style="font-family:monospace;color:var(--ink2);margin:0 0 4px">Ref: <b style="color:var(--navy)">${esc(p.ref)}</b></div>` : ''}
+            <div class="muted">${esc(p.developer)} · 📍 ${esc(p.location)}</div>
+            ${p.address ? `<div class="tiny muted" style="margin-top:3px">🏠 ${esc(p.address)}</div>` : ''}
+            <p style="margin:16px 0">${esc(p.summary)}</p>
+            <div class="card pad grid g2" style="gap:12px">
+              <div><div class="tiny muted">Participation from</div><div class="serif" style="font-size:22px;color:var(--bronze)">${fmtN(p.priceFrom)}</div></div>
+              <div><div class="tiny muted">Construction stage</div><div style="font-weight:700;color:var(--navy)">${esc(p.stage)}</div></div>
+              ${p.propertyType ? `<div><div class="tiny muted">Property type</div><div style="font-weight:700;color:var(--navy)">${esc(p.propertyType)}</div></div>` : ''}
+              ${(p.units === 0 || p.units) ? `<div><div class="tiny muted">Number of units</div><div style="font-weight:700;color:var(--navy)">${esc(String(p.units))}</div></div>` : ''}
+              ${p.deliveryDate ? `<div><div class="tiny muted">Proposed delivery</div><div style="font-weight:700;color:var(--navy)">${esc(fmtDate(p.deliveryDate))}</div></div>` : ''}
+            </div>
+            ${(p.ref && (p.units === 0 || p.units)) ? `<details class="card pad" style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;color:var(--navy)">Unit register — ${unitIds(p.ref, p.units).length} unit${unitIds(p.ref, p.units).length === 1 ? '' : 's'} <span class="tiny muted">· each tagged ${esc(p.ref)}</span></summary>
+              <div style="max-height:200px;overflow:auto;font-family:monospace;font-size:12px;line-height:1.9;margin-top:8px">${unitIds(p.ref, p.units).map(u => esc(u)).join('<br>')}</div></details>` : ''}
             ${pays.length ? `<div class="card pad" style="margin-top:14px"><h3 style="margin:0 0 8px;font-size:15px">Payments &amp; capital calls</h3>
               <table style="font-size:13px"><tbody>${pays.map(pay => `<tr><td>${esc(pay.label)}</td><td class="tiny muted">${esc(pay.dueDate || '')}</td><td style="text-align:right">${fmtN(pay.amount)}</td><td><span class="badge ${pay.status === 'paid' ? 'verified' : 'pending'}">${esc(pay.status)}</span></td></tr>`).join('')}</tbody></table></div>` : ''}
             <button class="btn primary" style="margin-top:16px" onclick="CODEVAPP.express('${p.id}')">I'm Interested — start qualification</button>
@@ -242,15 +255,20 @@
         <form class="card pad" onsubmit="return CODEVAPP.submitProperty(event)">
           <div class="field"><label>Property / development title</label><input name="title" required></div>
           <div class="field"><label>Developer / owner name</label><input name="developer" value="${esc(u.name)}" required></div>
-          <div class="field"><label>Location</label><input name="location" list="locOptions" placeholder="e.g. Lagos - Lekki" required autocomplete="off">
+          <div class="field"><label>Location <span class="tiny muted">(area — used for buyer filters)</span></label><input name="location" list="locOptions" placeholder="e.g. Lagos - Lekki" required autocomplete="off">
             <datalist id="locOptions">${(CFG.LOCATIONS || []).map(l => `<option value="${esc(l)}"></option>`).join('')}</datalist>
             <span class="tiny muted">Pick a suggestion or type a new area — it becomes filterable for buyers.</span></div>
+          <div class="field"><label>Address <span class="tiny muted">(full project address)</span></label><input name="address" placeholder="Street, area, city, state"></div>
+          <div class="row" style="gap:12px">
+            <div class="field" style="flex:1"><label>Property type</label><select name="propertyType"><option value="">—</option>${CFG.PROPERTY_TYPES.map(x => `<option>${x}</option>`).join('')}</select></div>
+            <div class="field" style="flex:1"><label>Number of units</label><input name="units" type="number" min="0" step="1"></div>
+            <div class="field" style="flex:1"><label>Proposed delivery date</label><input name="deliveryDate" type="date"></div></div>
           <div class="field"><label>Summary</label><textarea name="summary" rows="3" required></textarea></div>
           <div class="field"><label>Photos <span class="tiny muted">— up to ${MAX_PHOTOS}, from your phone or computer</span></label>
             <label class="photo-drop"><input type="file" accept="image/*,.heic,.heif" multiple onchange="CODEVAPP.addPhotos(this)"><span class="pd-inner">📷 Tap to add photos or take a picture</span></label>
             <div id="photoPreviews" class="photo-grid"></div></div>
           <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Participation from (₦)</label><input name="priceFrom" type="number" min="0" required></div>
-            <div class="field" style="flex:1"><label>Stage</label><select name="stage">${CFG.STAGES.map(x => `<option>${x}</option>`).join('')}</select></div></div>
+            <div class="field" style="flex:1"><label>Construction stage</label><select name="stage">${CFG.STAGES.map(x => `<option>${x}</option>`).join('')}</select></div></div>
           <button class="btn primary" style="width:100%">Submit for verification</button>
           <p class="tiny muted center" style="margin-top:8px">A default milestone schedule is attached — admin can refine timelines &amp; payments.</p>
         </form>
@@ -355,7 +373,7 @@
 
   async function submitProperty(e) { e.preventDefault(); const f = e.target; const u = me();
     const btn = f.querySelector('button[type=submit],button:not([type])'); if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
-    try { await db.properties.add({ title: f.title.value.trim(), developer: f.developer.value.trim(), location: f.location.value.trim(), summary: f.summary.value.trim(), priceFrom: Number(f.priceFrom.value), stage: f.stage.value, images: listingPhotos.slice() });
+    try { await db.properties.add({ title: f.title.value.trim(), developer: f.developer.value.trim(), location: f.location.value.trim(), address: f.address.value.trim(), propertyType: f.propertyType.value, units: f.units.value, deliveryDate: f.deliveryDate.value, summary: f.summary.value.trim(), priceFrom: Number(f.priceFrom.value), stage: f.stage.value, images: listingPhotos.slice() });
       if (CFG.imagesUnavailable) toast('Listing submitted. (Photos need a quick backend setup before they save — see admin.)');
       else toast('Submitted! Admin will verify it before it goes public.');
       listingPhotos = []; renderPhotoPreviews();
