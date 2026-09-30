@@ -31,6 +31,7 @@ window.CODEV = (function () {
     // Property types that are residential dwellings — the Bedrooms field shows only for these.
     RESIDENTIAL_TYPES: ['Apartment / Flat', 'Studio Apartment', 'Penthouse', 'Maisonette',
              'Terraced House', 'Townhouse', 'Semi-Detached House', 'Detached House', 'Bungalow'],
+    LAND_TYPES: ['Residential Land', 'Commercial Land', 'Mixed-Use Land'],
     BEDROOMS: ['Studio', '1 Bedroom', '2 Bedrooms', '3 Bedrooms', '4 Bedrooms', '5 Bedrooms', '6+ Bedrooms'],
     // Assurance & verification: key documents a developer submits per listing. Extensible —
     // add rows here (key must be stable & unique). The legal partner reviews each on their
@@ -58,6 +59,8 @@ window.CODEV = (function () {
       { name: 'Finishing', pct: 15 }, { name: 'Completion / Handover', pct: 5 },
     ],
     MILESTONE_STATUS: ['pending', 'in-progress', 'certified'],
+    // Display labels for milestone (payment-release) status; keys above stay stable in the DB.
+    MILESTONE_STATUS_LABELS: { 'pending': 'Payment Pending', 'in-progress': 'Payment in-Progress', 'certified': 'Payment Completed' },
     // Investor amount bands are anchored in USD; these rates convert them for display.
     // A super admin can edit them (persisted in platform_settings — see PLATFORM-SETTINGS.sql).
     CURRENCIES: ['USD', 'NGN', 'GBP'],
@@ -118,6 +121,7 @@ window.CODEV = (function () {
   const toProp = (r) => ({ id: r.id, ref: r.ref || '', title: r.title, developer: r.developer, location: r.location,
     address: r.address || '', propertyType: r.property_type || '', bedrooms: r.bedrooms || '',
     price: (r.price === 0 || r.price) ? r.price : '',
+    items: Array.isArray(r.property_items) ? r.property_items : [],
     units: (r.units === 0 || r.units) ? r.units : '', deliveryDate: r.delivery_date || '',
     summary: r.summary, priceFrom: r.price_from, stage: r.stage, status: r.status,
     legalStatus: r.legal_status || 'not_submitted', legalReviewedAt: r.legal_reviewed_at || null,
@@ -200,6 +204,7 @@ window.CODEV = (function () {
           submitted_by: s.user.id, submitted_by_email: s.user.email, submitted_by_role: (s.profile && s.profile.role) || p.submittedByRole };
         const extra = { address: p.address || null, property_type: p.propertyType || null,
           bedrooms: p.bedrooms || null, price: (p.price === '' || p.price == null) ? null : Number(p.price),
+          property_items: Array.isArray(p.items) ? p.items : [],
           units: (p.units === '' || p.units == null) ? null : Number(p.units), delivery_date: p.deliveryDate || null,
           ref: p.ref || makeListingRef() }; // unique reference assigned at submission (before admin verification)
         const withAll = Object.assign({}, row, extra, { images: p.images || [] });
@@ -223,6 +228,7 @@ window.CODEV = (function () {
         if ('propertyType' in patch) { row.property_type = patch.propertyType || null; newKeys.push('property_type'); }
         if ('bedrooms' in patch) { row.bedrooms = patch.bedrooms || null; newKeys.push('bedrooms'); }
         if ('price' in patch) { row.price = (patch.price === '' || patch.price == null) ? null : Number(patch.price); newKeys.push('price'); }
+        if ('items' in patch) { row.property_items = Array.isArray(patch.items) ? patch.items : []; newKeys.push('property_items'); }
         if ('units' in patch) { row.units = (patch.units === '' || patch.units == null) ? null : Number(patch.units); newKeys.push('units'); }
         if ('deliveryDate' in patch) { row.delivery_date = patch.deliveryDate || null; newKeys.push('delivery_date'); }
         if ('legalStatus' in patch) { row.legal_status = patch.legalStatus; row.legal_reviewed_at = ['cleared','conditionally_cleared'].indexOf(patch.legalStatus)>=0 ? nowISO() : null; }
@@ -504,8 +510,9 @@ window.CODEV = (function () {
     return out;
   };
 
-  // Bedrooms only apply to residential dwellings.
+  // Bedrooms only apply to residential dwellings; land size only to land types.
   const isResidential = (type) => (CFG.RESIDENTIAL_TYPES || []).indexOf(type) >= 0;
+  const isLand = (type) => (CFG.LAND_TYPES || []).indexOf(type) >= 0;
   // Combined listing-type label, e.g. "3 Bedroom Maisonette", "Studio Apartment / Flat", or just the type.
   const propTypeLabel = (p) => {
     const type = (p && p.propertyType) || '';
@@ -513,6 +520,19 @@ window.CODEV = (function () {
     if (type && bed && isResidential(type)) return bed.replace(/Bedrooms/i, 'Bedroom') + ' ' + type;
     return type;
   };
+  // Label for one property item (residential → bedrooms; land → size; else the type).
+  const itemLabel = (it) => {
+    const t = (it && it.type) || '';
+    if (isResidential(t) && it.bedrooms) return it.bedrooms.replace(/Bedrooms/i, 'Bedroom') + ' ' + t;
+    if (isLand(t)) { const parts = []; if (it.landSqm) parts.push(it.landSqm + ' sqm'); if (it.landSqft) parts.push(it.landSqft + ' sqft'); return t + (parts.length ? ' — ' + parts.join(' / ') : ''); }
+    return t;
+  };
+  // Min/max price across a listing's property items (numbers only).
+  const priceRange = (items) => {
+    const nums = (items || []).map(i => Number(i && i.price)).filter(n => n > 0);
+    if (!nums.length) return null;
+    return { min: Math.min.apply(null, nums), max: Math.max.apply(null, nums) };
+  };
 
-  return { CFG, auth, db, fmtN, esc, now: nowISO, makeListingRef, unitIds, isResidential, propTypeLabel };
+  return { CFG, auth, db, fmtN, esc, now: nowISO, makeListingRef, unitIds, isResidential, isLand, propTypeLabel, itemLabel, priceRange };
 })();
