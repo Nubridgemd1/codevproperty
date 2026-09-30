@@ -254,7 +254,7 @@
               <div class="tiny muted" style="margin:8px 0 4px">${ids.length} unit tag${ids.length===1?'':'s'} — every unit carries the listing reference:</div>
               <div style="max-height:130px;overflow:auto;font-family:monospace;font-size:12px;line-height:1.8">${ids.map(u=>esc(u)).join('<br>')||'<span class="muted">Set “Number of units” and save to generate unit tags.</span>'}</div>
             </div></div>`
-        : `<div class="field"><label>Listing reference</label><div class="tiny muted">A unique reference (e.g. <b>CDV-XXXXXX</b>) and a tag for every unit (<b>CDV-XXXXXX-U001 …</b>) are generated automatically when this listing is published — set Status to “verified” and Save.</div></div>`; })()}
+        : `<div class="field"><label>Listing reference</label><div class="tiny muted">A unique reference (e.g. <b>CDV-XXXXXX</b>) and a tag for every unit (<b>CDV-XXXXXX-U001 …</b>) are generated automatically when a listing is submitted. This one has none yet — it will be assigned on save.</div></div>`; })()}
       <div class="field"><label>Summary</label><textarea name="summary" rows="2">${esc(p.summary||'')}</textarea></div>
       <div class="field"><label>Photos <span class="tiny muted">— add or take a picture (up to 8). The <b>Cover</b> photo is what shows on the listing card; tap ★ on any photo to make it the cover.</span></label>
         <label class="photo-drop"><input type="file" accept="image/*,.heic,.heif" multiple onchange="ADMIN.addPhotos(this)"><span class="pd-inner">📷 Add photos or take a picture</span></label>

@@ -159,7 +159,8 @@ window.CODEV = (function () {
           milestones: p.milestones || defaultMilestones(), payments: p.payments || [],
           submitted_by: s.user.id, submitted_by_email: s.user.email, submitted_by_role: (s.profile && s.profile.role) || p.submittedByRole };
         const extra = { address: p.address || null, property_type: p.propertyType || null,
-          units: (p.units === '' || p.units == null) ? null : Number(p.units), delivery_date: p.deliveryDate || null };
+          units: (p.units === '' || p.units == null) ? null : Number(p.units), delivery_date: p.deliveryDate || null,
+          ref: p.ref || makeListingRef() }; // unique reference assigned at submission (before admin verification)
         const withAll = Object.assign({}, row, extra, { images: p.images || [] });
         try { return await sb('/rest/v1/properties', { method: 'POST', body: withAll, prefer: 'return=representation' }); }
         catch (e) { // Degrade gracefully if the DB is missing newer columns (images / address / property_type / units / delivery_date).
@@ -272,7 +273,7 @@ window.CODEV = (function () {
       async listMine() { const s = rd(L.sess, null); return s ? rd(L.prop, []).filter(p => (p.submittedBy || '').toLowerCase() === s.email.toLowerCase()) : []; },
       async listAll() { return rd(L.prop, []); },
       async byId(id) { return rd(L.prop, []).find(p => p.id === id); },
-      async add(p) { const s = rd(L.sess, null); const list = rd(L.prop, []); const rec = { id: uid(), status: 'pending', createdAt: nowISO(), submittedBy: s && s.email, submittedByRole: s && s.role, milestones: defaultMilestones(), payments: [], ...p }; list.unshift(rec); wr(L.prop, list); return rec; },
+      async add(p) { const s = rd(L.sess, null); const list = rd(L.prop, []); const rec = { id: uid(), ref: (p && p.ref) || makeListingRef(), status: 'pending', createdAt: nowISO(), submittedBy: s && s.email, submittedByRole: s && s.role, milestones: defaultMilestones(), payments: [], ...p }; if (!rec.ref) rec.ref = makeListingRef(); list.unshift(rec); wr(L.prop, list); return rec; },
       async update(id, patch) { const list = rd(L.prop, []); const i = list.findIndex(p => p.id === id); if (i < 0) return; list[i] = { ...list[i], ...patch }; wr(L.prop, list); return list[i]; },
       async setStatus(id, status) { return localDB.properties.update(id, { status, verifiedAt: status === 'verified' ? nowISO() : undefined }); },
       async remove(id) { wr(L.prop, rd(L.prop, []).filter(p => p.id !== id)); },
