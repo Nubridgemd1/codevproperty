@@ -4,14 +4,14 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CoDev — Admin Console</title>
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=8" />
-<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=8" />
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=8" />
-<link rel="shortcut icon" href="favicon-32.png?v=8" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=9" />
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=9" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=9" />
+<link rel="shortcut icon" href="favicon-32.png?v=9" />
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=8" />
+<link rel="stylesheet" href="styles.css?v=9" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -50,7 +50,7 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=8"></script>
+<script src="data.js?v=9"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
@@ -333,6 +333,7 @@
     if(s==='verified' && !p.ref) patch.ref=window.CODEV.makeListingRef(); // assign the permanent listing reference once, on publish
     try{ await db.properties.update(id,patch); toast('Listing '+(s==='verified'?('verified & published · '+(patch.ref||p.ref||'')):s)); await load(); }catch(err){toast(err.message);} }
   function copyRef(v){ try{ navigator.clipboard.writeText(v); toast('Copied '+v); }catch{ toast('Copy not available'); } }
+  function onTypeChange(sel){ const f=document.getElementById('bedroomsField'); if(f) f.style.display=window.CODEV.isResidential(sel.value)?'':'none'; }
   async function delProp(id){ const p=PROPS.find(x=>x.id===id); if(confirm('Delete "'+p.title+'"?')){ try{ await db.properties.remove(id); toast('Listing deleted'); await load(); }catch(err){toast(err.message);} } }
 
   let EDIT=null;
@@ -344,7 +345,10 @@
         <div class="field" style="flex:1"><label>Location <span class="tiny muted">(area — used for buyer filters)</span></label><input name="location" list="admLocOptions" value="${esc(p.location||'')}"><datalist id="admLocOptions">${(CFG.LOCATIONS||[]).map(l=>`<option value="${esc(l)}"></option>`).join('')}</datalist></div></div>
       <div class="field"><label>Address <span class="tiny muted">(full project address)</span></label><input name="address" value="${esc(p.address||'')}" placeholder="Street, area, city, state"></div>
       <div class="row" style="gap:12px">
-        <div class="field" style="flex:1"><label>Property type</label><select name="propertyType"><option value="">—</option>${CFG.PROPERTY_TYPES.map(x=>`<option ${x===p.propertyType?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div class="field" style="flex:1"><label>Property type</label><select name="propertyType" onchange="ADMIN.onTypeChange(this)"><option value="">—</option>${CFG.PROPERTY_TYPES.map(x=>`<option ${x===p.propertyType?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div class="field" style="flex:1${CFG.RESIDENTIAL_TYPES.indexOf(p.propertyType)>=0?'':';display:none'}" id="bedroomsField"><label>Bedrooms</label><select name="bedrooms"><option value="">—</option>${CFG.BEDROOMS.map(x=>`<option ${x===p.bedrooms?'selected':''}>${x}</option>`).join('')}</select></div></div>
+      <div class="row" style="gap:12px">
+        <div class="field" style="flex:1"><label>Price (₦) <span class="tiny muted">— property price</span></label><input name="price" type="number" min="0" value="${(p.price===0||p.price)?p.price:''}"></div>
         <div class="field" style="flex:1"><label>Number of units</label><input name="units" type="number" min="0" step="1" value="${(p.units===0||p.units)?p.units:''}"></div>
         <div class="field" style="flex:1"><label>Proposed delivery date</label><input name="deliveryDate" type="date" value="${esc(p.deliveryDate||'')}"></div></div>
       ${(function(){ const ids=window.CODEV.unitIds(p.ref,p.units); return p.ref
@@ -409,7 +413,7 @@
   async function saveProp(e,id){ e.preventDefault(); const f=e.target; const p=PROPS.find(x=>x.id===id)||{};
     const willVerify=f.status.value==='verified'; const ref = p.ref || (willVerify ? window.CODEV.makeListingRef() : '');
     try{ await db.properties.update(id,{ title:f.title.value.trim(), developer:f.developer.value.trim(), location:f.location.value.trim(), summary:f.summary.value.trim(),
-      address:f.address.value.trim(), propertyType:f.propertyType.value, units:f.units.value, deliveryDate:f.deliveryDate.value,
+      address:f.address.value.trim(), propertyType:f.propertyType.value, bedrooms:(window.CODEV.isResidential(f.propertyType.value)?f.bedrooms.value:''), price:f.price.value, units:f.units.value, deliveryDate:f.deliveryDate.value,
       priceFrom:Number(f.priceFrom.value), stage:f.stage.value, status:f.status.value, legalStatus:f.legalStatus.value, milestones:EDIT.milestones, payments:EDIT.payments, images:EDIT.images,
       verifiedAt:willVerify?window.CODEV.now():null, ...(ref?{ref}:{}) });
       closeModal(); toast('Listing, milestones & payments updated'); await load();
@@ -538,7 +542,7 @@
   async function delAcc(id){ const a=ACCS.find(x=>x.id===id); if(confirm('Delete account "'+(a.name||a.email)+'"?')){ try{ await db.profiles.remove(id); toast('Account deleted'); await load(); }catch(err){toast(err.message);} } }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,copyRef,reviewDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,admAccess,delProp,editProp,saveProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+  window.ADMIN={login,lock,tab,setStatus,copyRef,onTypeChange,reviewDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,admAccess,delProp,editProp,saveProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
     addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps};
 
   // Session timeout in the admin console → message, then back to the sign-in gate.

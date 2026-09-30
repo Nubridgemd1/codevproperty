@@ -23,9 +23,15 @@ window.CODEV = (function () {
     STAGES: ['Land / Commencement', 'Foundation', 'Structural Frame', 'Building Envelope',
              'Mechanical & Electrical', 'Finishing', 'Completion / Handover'],
     // Property types for the listing entry (admin + developer submission).
-    PROPERTY_TYPES: ['Residential — apartments', 'Residential — detached / terraced homes',
-             'Mixed-use', 'Commercial', 'Retail', 'Office', 'Industrial / warehousing',
-             'Serviced plots / land', 'Hospitality', 'Other'],
+    PROPERTY_TYPES: ['Apartment / Flat', 'Studio Apartment', 'Penthouse', 'Maisonette',
+             'Terraced House', 'Townhouse', 'Semi-Detached House', 'Detached House', 'Bungalow',
+             'Residential Land', 'Commercial Land', 'Mixed-Use Land',
+             'Office', 'Shop / Retail Unit', 'Warehouse', 'Industrial Property',
+             'Hotel / Hospitality Property', 'Mixed-Use Development', 'Other'],
+    // Property types that are residential dwellings — the Bedrooms field shows only for these.
+    RESIDENTIAL_TYPES: ['Apartment / Flat', 'Studio Apartment', 'Penthouse', 'Maisonette',
+             'Terraced House', 'Townhouse', 'Semi-Detached House', 'Detached House', 'Bungalow'],
+    BEDROOMS: ['Studio', '1 Bedroom', '2 Bedrooms', '3 Bedrooms', '4 Bedrooms', '5 Bedrooms', '6+ Bedrooms'],
     // Assurance & verification: key documents a developer submits per listing. Extensible —
     // add rows here (key must be stable & unique). The legal partner reviews each on their
     // dashboard; buyers see the verification status (not the files).
@@ -110,7 +116,8 @@ window.CODEV = (function () {
 
   // ---- mappers (snake_case DB <-> camelCase app) ----
   const toProp = (r) => ({ id: r.id, ref: r.ref || '', title: r.title, developer: r.developer, location: r.location,
-    address: r.address || '', propertyType: r.property_type || '',
+    address: r.address || '', propertyType: r.property_type || '', bedrooms: r.bedrooms || '',
+    price: (r.price === 0 || r.price) ? r.price : '',
     units: (r.units === 0 || r.units) ? r.units : '', deliveryDate: r.delivery_date || '',
     summary: r.summary, priceFrom: r.price_from, stage: r.stage, status: r.status,
     legalStatus: r.legal_status || 'not_submitted', legalReviewedAt: r.legal_reviewed_at || null,
@@ -192,6 +199,7 @@ window.CODEV = (function () {
           milestones: p.milestones || defaultMilestones(), payments: p.payments || [],
           submitted_by: s.user.id, submitted_by_email: s.user.email, submitted_by_role: (s.profile && s.profile.role) || p.submittedByRole };
         const extra = { address: p.address || null, property_type: p.propertyType || null,
+          bedrooms: p.bedrooms || null, price: (p.price === '' || p.price == null) ? null : Number(p.price),
           units: (p.units === '' || p.units == null) ? null : Number(p.units), delivery_date: p.deliveryDate || null,
           ref: p.ref || makeListingRef() }; // unique reference assigned at submission (before admin verification)
         const withAll = Object.assign({}, row, extra, { images: p.images || [] });
@@ -213,6 +221,8 @@ window.CODEV = (function () {
         if ('ref' in patch) { row.ref = patch.ref || null; newKeys.push('ref'); }
         if ('address' in patch) { row.address = patch.address || null; newKeys.push('address'); }
         if ('propertyType' in patch) { row.property_type = patch.propertyType || null; newKeys.push('property_type'); }
+        if ('bedrooms' in patch) { row.bedrooms = patch.bedrooms || null; newKeys.push('bedrooms'); }
+        if ('price' in patch) { row.price = (patch.price === '' || patch.price == null) ? null : Number(patch.price); newKeys.push('price'); }
         if ('units' in patch) { row.units = (patch.units === '' || patch.units == null) ? null : Number(patch.units); newKeys.push('units'); }
         if ('deliveryDate' in patch) { row.delivery_date = patch.deliveryDate || null; newKeys.push('delivery_date'); }
         if ('legalStatus' in patch) { row.legal_status = patch.legalStatus; row.legal_reviewed_at = ['cleared','conditionally_cleared'].indexOf(patch.legalStatus)>=0 ? nowISO() : null; }
@@ -494,5 +504,15 @@ window.CODEV = (function () {
     return out;
   };
 
-  return { CFG, auth, db, fmtN, esc, now: nowISO, makeListingRef, unitIds };
+  // Bedrooms only apply to residential dwellings.
+  const isResidential = (type) => (CFG.RESIDENTIAL_TYPES || []).indexOf(type) >= 0;
+  // Combined listing-type label, e.g. "3 Bedroom Maisonette", "Studio Apartment / Flat", or just the type.
+  const propTypeLabel = (p) => {
+    const type = (p && p.propertyType) || '';
+    const bed = (p && p.bedrooms) || '';
+    if (type && bed && isResidential(type)) return bed.replace(/Bedrooms/i, 'Bedroom') + ' ' + type;
+    return type;
+  };
+
+  return { CFG, auth, db, fmtN, esc, now: nowISO, makeListingRef, unitIds, isResidential, propTypeLabel };
 })();

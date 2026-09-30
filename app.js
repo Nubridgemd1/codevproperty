@@ -187,7 +187,8 @@
     <div style="padding:16px"><div class="small muted" style="font-weight:600">${esc(p.developer)}</div>
       <h3 style="margin:2px 0 6px;font-size:19px">${esc(p.title)}</h3>
       ${p.ref ? `<div class="tiny" style="font-family:monospace;color:var(--ink2);margin:0 0 4px">${esc(p.ref)}</div>` : ''}
-      ${(p.propertyType || p.units === 0 || p.units) ? `<div class="tiny muted" style="margin:0 0 6px">${[p.propertyType ? esc(p.propertyType) : '', (p.units === 0 || p.units) ? esc(String(p.units)) + ' units' : ''].filter(Boolean).join(' · ')}</div>` : ''}
+      ${(function(){ const t = window.CODEV.propTypeLabel(p); const u = (p.units === 0 || p.units) ? (p.units + ' units') : ''; const s = [t, u].filter(Boolean).join(' · '); return s ? `<div class="tiny muted" style="margin:0 0 5px">${esc(s)}</div>` : ''; })()}
+      ${(p.price === 0 || p.price) ? `<div class="tiny" style="margin:0 0 6px;font-weight:700;color:var(--navy)">Price ${fmtN(p.price)}</div>` : ''}
       ${legalVerified(p) ? `<div style="margin:0 0 7px">${legalBadgeHtml(p)}</div>` : ''}
       <p class="small muted" style="min-height:38px">${esc(p.summary)}</p>
       ${fundingBar(p)}
@@ -258,15 +259,17 @@
             ${p.address ? `<div class="tiny muted" style="margin-top:3px">🏠 ${esc(p.address)}</div>` : ''}
             <p style="margin:16px 0">${esc(p.summary)}</p>
             <div class="card pad grid g2" style="gap:12px">
+              ${(p.price === 0 || p.price) ? `<div><div class="tiny muted">Price</div><div class="serif" style="font-size:22px;color:var(--bronze)">${fmtN(p.price)}</div></div>` : ''}
               <div><div class="tiny muted">Participation from</div><div class="serif" style="font-size:22px;color:var(--bronze)">${fmtN(p.priceFrom)}</div></div>
               <div><div class="tiny muted">Construction stage</div><div style="font-weight:700;color:var(--navy)">${esc(p.stage)}</div></div>
-              ${p.propertyType ? `<div><div class="tiny muted">Property type</div><div style="font-weight:700;color:var(--navy)">${esc(p.propertyType)}</div></div>` : ''}
+              ${window.CODEV.propTypeLabel(p) ? `<div><div class="tiny muted">Property type</div><div style="font-weight:700;color:var(--navy)">${esc(window.CODEV.propTypeLabel(p))}</div></div>` : ''}
               ${(p.units === 0 || p.units) ? `<div><div class="tiny muted">Number of units</div><div style="font-weight:700;color:var(--navy)">${esc(String(p.units))}</div></div>` : ''}
               ${p.deliveryDate ? `<div><div class="tiny muted">Proposed delivery</div><div style="font-weight:700;color:var(--navy)">${esc(fmtDate(p.deliveryDate))}</div></div>` : ''}
             </div>
             <div class="card pad" style="margin-top:14px"><div class="spread" style="margin-bottom:8px"><h3 style="margin:0;font-size:15px">Verification &amp; assurance</h3>${legalBadgeHtml(p) || '<span class="tiny muted">CoDev legal due diligence</span>'}</div>
               <table style="font-size:13px;width:100%"><tbody>${mergeReqDocs(dstat || [], 'doc_key').map(r => { const st = (r.doc && r.doc.status) || 'awaiting'; return `<tr><td>${esc(r.label)}</td><td style="text-align:right;white-space:nowrap">${docStatusBadge(st)}</td></tr>`; }).join('')}</tbody></table>
-              <div class="tiny muted" style="margin-top:8px">Key project documents are reviewed by CoDev's legal partner. Underlying documents can be requested during investor qualification.</div></div>
+              <div class="tiny muted" style="margin-top:8px">Key project documents are reviewed by CoDev's legal partner. Underlying documents can be requested during investor qualification.</div>
+              ${(function(){ const u = me(); return (u && p.submittedBy && u.email && String(p.submittedBy).toLowerCase() === String(u.email).toLowerCase()) ? `<a class="btn primary sm" style="margin-top:10px" href="#/docs/${p.id}">📤 Upload / manage assurance documents</a>` : ''; })()}</div>
             ${(p.ref && (p.units === 0 || p.units)) ? `<details class="card pad" style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;color:var(--navy)">Unit register — ${unitIds(p.ref, p.units).length} unit${unitIds(p.ref, p.units).length === 1 ? '' : 's'} <span class="tiny muted">· each tagged ${esc(p.ref)}</span></summary>
               <div style="max-height:200px;overflow:auto;font-family:monospace;font-size:12px;line-height:1.9;margin-top:8px">${unitIds(p.ref, p.units).map(u => esc(u)).join('<br>')}</div></details>` : ''}
             ${pays.length ? `<div class="card pad" style="margin-top:14px"><h3 style="margin:0 0 8px;font-size:15px">Payments &amp; capital calls</h3>
@@ -286,7 +289,10 @@
             <span class="tiny muted">Pick a suggestion or type a new area — it becomes filterable for buyers.</span></div>
           <div class="field"><label>Address <span class="tiny muted">(full project address)</span></label><input name="address" placeholder="Street, area, city, state"></div>
           <div class="row" style="gap:12px">
-            <div class="field" style="flex:1"><label>Property type</label><select name="propertyType"><option value="">—</option>${CFG.PROPERTY_TYPES.map(x => `<option>${x}</option>`).join('')}</select></div>
+            <div class="field" style="flex:1"><label>Property type</label><select name="propertyType" onchange="CODEVAPP.onTypeChange(this)"><option value="">—</option>${CFG.PROPERTY_TYPES.map(x => `<option>${x}</option>`).join('')}</select></div>
+            <div class="field" style="flex:1;display:none" id="bedroomsFieldDev"><label>Bedrooms</label><select name="bedrooms"><option value="">—</option>${CFG.BEDROOMS.map(x => `<option>${x}</option>`).join('')}</select></div></div>
+          <div class="row" style="gap:12px">
+            <div class="field" style="flex:1"><label>Price (₦) <span class="tiny muted">— property price</span></label><input name="price" type="number" min="0"></div>
             <div class="field" style="flex:1"><label>Number of units</label><input name="units" type="number" min="0" step="1"></div>
             <div class="field" style="flex:1"><label>Proposed delivery date</label><input name="deliveryDate" type="date"></div></div>
           <div class="field"><label>Summary</label><textarea name="summary" rows="3" required></textarea></div>
@@ -351,7 +357,7 @@
   };
   function listCards(mine) { if (!mine || !mine.length) return `<div class="card pad small muted">No submissions yet. <a href="#/list">List a property →</a></div>`;
     return `<div class="grid" style="gap:10px">${mine.map(p => `<div class="card pad"><div class="spread"><div class="row" style="gap:11px;align-items:center">${p.images && p.images[0] ? `<img src="${p.images[0]}" alt="" style="width:48px;height:48px;border-radius:9px;object-fit:cover;flex:none">` : ''}<div><b>${esc(p.title)}</b>${p.ref ? ` <span class="tiny" style="font-family:monospace;color:var(--ink2)">${esc(p.ref)}</span>` : ''}<div class="tiny muted">${esc(p.location)} · ${fmtN(p.priceFrom)} · funded ${funded(p)}%</div></div></div><span class="badge ${p.status}">${p.status}</span></div>
-      <div class="row" style="gap:8px;margin-top:10px"><a class="btn ghost sm" href="#/docs/${p.id}">📄 Assurance documents</a></div></div>`).join('')}</div>`; }
+      <div class="row" style="gap:8px;margin-top:10px"><a class="btn primary sm" href="#/docs/${p.id}">📤 Upload / manage documents</a></div></div>`).join('')}</div>`; }
   function docRowDev(pid, r) { const d = r.doc || {}; const st = d.status || 'awaiting';
     return `<div class="card pad">
       <div class="spread"><b>${esc(r.label)}</b>${docStatusBadge(st)}</div>
@@ -362,6 +368,7 @@
   async function enterDealRoom(pid) { const ck = document.getElementById('ndaAck'); if (!ck || !ck.checked) { toast('Please acknowledge the confidentiality terms'); return; }
     try { await db.dealroom.acknowledge(pid, 'v1'); toast('Welcome to the Deal Room'); route(); } catch (e) { toast((e && e.message) || 'Could not open the Deal Room'); } }
   function logDeal(pid, key, event) { try { db.dealroom.log(pid, event, key); } catch (e) {} }
+  function onTypeChange(sel) { const f = document.getElementById('bedroomsFieldDev'); if (f) f.style.display = window.CODEV.isResidential(sel.value) ? '' : 'none'; }
   function buyerTxCard(pid, t) { const issued = (t.documents || []).filter(d => d.fileData);
     return `<div class="card pad"><div class="spread"><div><b>${esc(TX_TYPE_LBL[t.txType] || t.txType)}</b>${t.amount ? ` · <span class="serif" style="color:var(--bronze)">${fmtN(t.amount)}</span>` : ''}</div>${txStatusBadge(t.status)}</div>
       ${issued.length ? `<div class="tiny muted" style="margin-top:8px">Documents from CoDev:</div>${issued.map(d => `<div class="spread" style="padding:4px 0"><span class="small">${esc(d.title || d.docType || 'Document')}</span><a class="btn ghost sm" href="${d.fileData}" download="${esc(d.fileName || 'document')}">Download</a></div>`).join('')}` : ''}
@@ -481,7 +488,7 @@
 
   async function submitProperty(e) { e.preventDefault(); const f = e.target; const u = me();
     const btn = f.querySelector('button[type=submit],button:not([type])'); if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
-    try { await db.properties.add({ title: f.title.value.trim(), developer: f.developer.value.trim(), location: f.location.value.trim(), address: f.address.value.trim(), propertyType: f.propertyType.value, units: f.units.value, deliveryDate: f.deliveryDate.value, summary: f.summary.value.trim(), priceFrom: Number(f.priceFrom.value), stage: f.stage.value, images: listingPhotos.slice() });
+    try { await db.properties.add({ title: f.title.value.trim(), developer: f.developer.value.trim(), location: f.location.value.trim(), address: f.address.value.trim(), propertyType: f.propertyType.value, bedrooms: (CFG.RESIDENTIAL_TYPES.indexOf(f.propertyType.value) >= 0 ? f.bedrooms.value : ''), price: f.price.value, units: f.units.value, deliveryDate: f.deliveryDate.value, summary: f.summary.value.trim(), priceFrom: Number(f.priceFrom.value), stage: f.stage.value, images: listingPhotos.slice() });
       if (CFG.imagesUnavailable) toast('Listing submitted. (Photos need a quick backend setup before they save — see admin.)');
       else toast('Submitted! Admin will verify it before it goes public.');
       listingPhotos = []; renderPhotoPreviews();
@@ -636,7 +643,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, enterDealRoom, logDeal, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, enterDealRoom, logDeal, onTypeChange, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
   // Session timeout → clean logout + re-login prompt (fired by the data layer on an expired JWT).
   window.addEventListener('codev:session-expired', () => {
     renderAuthArea();
