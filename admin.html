@@ -4,14 +4,14 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CoDev — Admin Console</title>
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=4" />
-<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=4" />
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=4" />
-<link rel="shortcut icon" href="favicon-32.png?v=4" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=5" />
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=5" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=5" />
+<link rel="shortcut icon" href="favicon-32.png?v=5" />
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=4" />
+<link rel="stylesheet" href="styles.css?v=5" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -50,7 +50,7 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=4"></script>
+<script src="data.js?v=5"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
@@ -237,13 +237,18 @@
     $('#mBody').innerHTML=`<form onsubmit="return ADMIN.saveProp(event,'${id}')">
       <div class="field"><label>Title</label><input name="title" value="${esc(p.title)}" required></div>
       <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Developer / owner</label><input name="developer" value="${esc(p.developer||'')}"></div>
-        <div class="field" style="flex:1"><label>Location</label><input name="location" list="admLocOptions" value="${esc(p.location||'')}"><datalist id="admLocOptions">${(CFG.LOCATIONS||[]).map(l=>`<option value="${esc(l)}"></option>`).join('')}</datalist></div></div>
+        <div class="field" style="flex:1"><label>Location <span class="tiny muted">(area — used for buyer filters)</span></label><input name="location" list="admLocOptions" value="${esc(p.location||'')}"><datalist id="admLocOptions">${(CFG.LOCATIONS||[]).map(l=>`<option value="${esc(l)}"></option>`).join('')}</datalist></div></div>
+      <div class="field"><label>Address <span class="tiny muted">(full project address)</span></label><input name="address" value="${esc(p.address||'')}" placeholder="Street, area, city, state"></div>
+      <div class="row" style="gap:12px">
+        <div class="field" style="flex:1"><label>Property type</label><select name="propertyType"><option value="">—</option>${CFG.PROPERTY_TYPES.map(x=>`<option ${x===p.propertyType?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div class="field" style="flex:1"><label>Number of units</label><input name="units" type="number" min="0" step="1" value="${(p.units===0||p.units)?p.units:''}"></div>
+        <div class="field" style="flex:1"><label>Proposed delivery date</label><input name="deliveryDate" type="date" value="${esc(p.deliveryDate||'')}"></div></div>
       <div class="field"><label>Summary</label><textarea name="summary" rows="2">${esc(p.summary||'')}</textarea></div>
       <div class="field"><label>Photos <span class="tiny muted">— add or take a picture (up to 8). The <b>Cover</b> photo is what shows on the listing card; tap ★ on any photo to make it the cover.</span></label>
         <label class="photo-drop"><input type="file" accept="image/*,.heic,.heif" multiple onchange="ADMIN.addPhotos(this)"><span class="pd-inner">📷 Add photos or take a picture</span></label>
         <div id="imgRows" class="photo-grid"></div></div>
       <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Participation from (₦)</label><input name="priceFrom" type="number" value="${p.priceFrom||0}"></div>
-        <div class="field" style="flex:1"><label>Stage</label><select name="stage">${CFG.STAGES.map(x=>`<option ${x===p.stage?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div class="field" style="flex:1"><label>Construction stage</label><select name="stage">${CFG.STAGES.map(x=>`<option ${x===p.stage?'selected':''}>${x}</option>`).join('')}</select></div>
         <div class="field" style="flex:1"><label>Status</label><select name="status">${['pending','verified','rejected'].map(x=>`<option ${x===p.status?'selected':''}>${x}</option>`).join('')}</select></div></div>
       <div class="field"><label>Legal review status <span class="tiny muted">— shows a “CoDev Legal Verified” badge publicly only when Cleared / Conditionally cleared</span></label>
         <select name="legalStatus">${[['not_submitted','Not submitted'],['under_review','Under review'],['information_required','Information required'],['conditionally_cleared','Conditionally cleared'],['cleared','Cleared'],['material_issue','Material issue'],['rejected','Rejected / withdrawn']].map(o=>`<option value="${o[0]}" ${o[0]===(p.legalStatus||'not_submitted')?'selected':''}>${o[1]}</option>`).join('')}</select></div>
@@ -289,6 +294,7 @@
   function paySet(i,k,v){ EDIT.payments[i][k]=v; } function delPay(i){ EDIT.payments.splice(i,1); renderPay(); } function addPay(){ EDIT.payments.push({label:'',amount:0,dueDate:'',status:'due'}); renderPay(); }
   async function saveProp(e,id){ e.preventDefault(); const f=e.target;
     try{ await db.properties.update(id,{ title:f.title.value.trim(), developer:f.developer.value.trim(), location:f.location.value.trim(), summary:f.summary.value.trim(),
+      address:f.address.value.trim(), propertyType:f.propertyType.value, units:f.units.value, deliveryDate:f.deliveryDate.value,
       priceFrom:Number(f.priceFrom.value), stage:f.stage.value, status:f.status.value, legalStatus:f.legalStatus.value, milestones:EDIT.milestones, payments:EDIT.payments, images:EDIT.images,
       verifiedAt:f.status.value==='verified'?window.CODEV.now():null });
       closeModal(); toast('Listing, milestones & payments updated'); await load();

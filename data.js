@@ -22,6 +22,10 @@ window.CODEV = (function () {
                 'Port Harcourt', 'Ibadan', 'Enugu', 'Abeokuta', 'Kano'],
     STAGES: ['Land / Commencement', 'Foundation', 'Structural Frame', 'Building Envelope',
              'Mechanical & Electrical', 'Finishing', 'Completion / Handover'],
+    // Property types for the listing entry (admin + developer submission).
+    PROPERTY_TYPES: ['Residential — apartments', 'Residential — detached / terraced homes',
+             'Mixed-use', 'Commercial', 'Retail', 'Office', 'Industrial / warehousing',
+             'Serviced plots / land', 'Hospitality', 'Other'],
     // Default milestone schedule (name + % of funding released). Admin can edit per development.
     MILESTONE_TEMPLATE: [
       { name: 'Commitment / SPV Entry', pct: 10 }, { name: 'Land / Commencement', pct: 15 },
@@ -86,6 +90,8 @@ window.CODEV = (function () {
 
   // ---- mappers (snake_case DB <-> camelCase app) ----
   const toProp = (r) => ({ id: r.id, title: r.title, developer: r.developer, location: r.location,
+    address: r.address || '', propertyType: r.property_type || '',
+    units: (r.units === 0 || r.units) ? r.units : '', deliveryDate: r.delivery_date || '',
     summary: r.summary, priceFrom: r.price_from, stage: r.stage, status: r.status,
     legalStatus: r.legal_status || 'not_submitted', legalReviewedAt: r.legal_reviewed_at || null,
     submittedBy: r.submitted_by_email, submittedByRole: r.submitted_by_role, createdAt: r.created_at, verifiedAt: r.verified_at,
@@ -152,11 +158,16 @@ window.CODEV = (function () {
         const row = { title: p.title, developer: p.developer, location: p.location, summary: p.summary, price_from: p.priceFrom, stage: p.stage,
           milestones: p.milestones || defaultMilestones(), payments: p.payments || [],
           submitted_by: s.user.id, submitted_by_email: s.user.email, submitted_by_role: (s.profile && s.profile.role) || p.submittedByRole };
-        const withImages = Object.assign({}, row, { images: p.images || [] });
-        try { return await sb('/rest/v1/properties', { method: 'POST', body: withImages, prefer: 'return=representation' }); }
-        catch (e) { // If the DB has no `images` column yet, still save the listing (photos dropped) and flag it.
-          if (/images/i.test((e && e.message) || '')) { CFG.imagesUnavailable = true; return sb('/rest/v1/properties', { method: 'POST', body: row, prefer: 'return=representation' }); }
-          throw e; } },
+        const extra = { address: p.address || null, property_type: p.propertyType || null,
+          units: (p.units === '' || p.units == null) ? null : Number(p.units), delivery_date: p.deliveryDate || null };
+        const withAll = Object.assign({}, row, extra, { images: p.images || [] });
+        try { return await sb('/rest/v1/properties', { method: 'POST', body: withAll, prefer: 'return=representation' }); }
+        catch (e) { // Degrade gracefully if the DB is missing newer columns (images / address / property_type / units / delivery_date).
+          const msg = (e && e.message) || ''; if (!/images|address|property_type|units|delivery_date|column|schema cache/i.test(msg)) throw e;
+          const body = Object.assign({}, row);
+          if (/images/i.test(msg)) CFG.imagesUnavailable = true; else body.images = p.images || [];
+          if (/address|property_type|units|delivery_date|column|schema cache/i.test(msg)) CFG.listingFieldsUnavailable = true; else Object.assign(body, extra);
+          return sb('/rest/v1/properties', { method: 'POST', body: body, prefer: 'return=representation' }); } },
       async update(id, patch) { const row = {};
         if ('title' in patch) row.title = patch.title; if ('developer' in patch) row.developer = patch.developer;
         if ('location' in patch) row.location = patch.location; if ('summary' in patch) row.summary = patch.summary;
@@ -164,8 +175,17 @@ window.CODEV = (function () {
         if ('status' in patch) row.status = patch.status; if ('verifiedAt' in patch) row.verified_at = patch.verifiedAt;
         if ('milestones' in patch) row.milestones = patch.milestones; if ('payments' in patch) row.payments = patch.payments;
         if ('images' in patch) row.images = patch.images;
+        const newKeys = [];
+        if ('address' in patch) { row.address = patch.address || null; newKeys.push('address'); }
+        if ('propertyType' in patch) { row.property_type = patch.propertyType || null; newKeys.push('property_type'); }
+        if ('units' in patch) { row.units = (patch.units === '' || patch.units == null) ? null : Number(patch.units); newKeys.push('units'); }
+        if ('deliveryDate' in patch) { row.delivery_date = patch.deliveryDate || null; newKeys.push('delivery_date'); }
         if ('legalStatus' in patch) { row.legal_status = patch.legalStatus; row.legal_reviewed_at = ['cleared','conditionally_cleared'].indexOf(patch.legalStatus)>=0 ? nowISO() : null; }
-        return sb('/rest/v1/properties?id=eq.' + id, { method: 'PATCH', body: row, prefer: 'return=representation' }); },
+        try { return await sb('/rest/v1/properties?id=eq.' + id, { method: 'PATCH', body: row, prefer: 'return=representation' }); }
+        catch (e) { // If newer columns aren't migrated yet, save the rest and flag it rather than losing the edit.
+          const msg = (e && e.message) || ''; if (!newKeys.length || !/address|property_type|units|delivery_date|column|schema cache/i.test(msg)) throw e;
+          CFG.listingFieldsUnavailable = true; newKeys.forEach(k => delete row[k]);
+          return sb('/rest/v1/properties?id=eq.' + id, { method: 'PATCH', body: row, prefer: 'return=representation' }); } },
       async setStatus(id, status) { return sbDB.properties.update(id, { status, verifiedAt: status === 'verified' ? nowISO() : null }); },
       async remove(id) { return sb('/rest/v1/properties?id=eq.' + id, { method: 'DELETE' }); },
     },
