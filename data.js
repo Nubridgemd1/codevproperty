@@ -122,6 +122,11 @@ window.CODEV = (function () {
     fileData: r.file_data || '', fileName: r.file_name || '', fileType: r.file_type || '',
     status: r.status || 'awaiting', note: r.note || '',
     submittedAt: r.submitted_at || null, reviewedAt: r.reviewed_at || null, reviewedBy: r.reviewed_by || null });
+
+  const toAccess = (r) => ({ id: r.id, propertyId: r.property_id, userId: r.user_id, userEmail: r.user_email, userName: r.user_name,
+    status: r.status || 'active', ndaVersion: r.nda_version || '', acknowledgedAt: r.acknowledged_at || null,
+    grantedAt: r.granted_at || null, expiresAt: r.expires_at || null, revokedAt: r.revoked_at || null, createdAt: r.created_at || null });
+  const toEvent = (r) => ({ id: r.id, propertyId: r.property_id, userId: r.user_id, userEmail: r.user_email, event: r.event, docKey: r.doc_key || '', createdAt: r.created_at || null });
   const toAcc = (r) => ({ id: r.id, name: r.name, email: r.email, role: r.role, status: r.status, createdAt: r.created_at,
     permissions: Array.isArray(r.permissions) ? r.permissions : [],
     about: r.about || '', website: r.website || '', phone: r.phone || '', brochure: r.brochure || '' });
@@ -291,10 +296,30 @@ window.CODEV = (function () {
         return sb('/rest/v1/listing_documents?id=eq.' + id, { method: 'PATCH', body: row, prefer: 'return=representation' }); },
       async remove(id) { return sb('/rest/v1/listing_documents?id=eq.' + id, { method: 'DELETE' }); },
     },
+    // ---- Deal Room (verified-buyer document access; see DEALROOM.sql) ----
+    dealroom: {
+      async isVerifiedBuyer(propertyId) { const s = getSession(); if (!s) return false;
+        try { const r = await sb('/rest/v1/qualifications?property_id=eq.' + propertyId + '&user_id=eq.' + s.user.id + '&status=eq.codev_verified&select=id&limit=1'); return !!(r && r.length); } catch { return false; } },
+      async myAccess(propertyId) { const s = getSession(); if (!s) return null;
+        const r = await sb('/rest/v1/deal_room_access?property_id=eq.' + propertyId + '&user_id=eq.' + s.user.id + '&select=*&limit=1'); return (r && r[0]) ? toAccess(r[0]) : null; },
+      async acknowledge(propertyId, ndaVersion) { const s = getSession();
+        const row = { property_id: propertyId, user_id: s.user.id, user_email: s.user.email, user_name: (s.profile && s.profile.name) || s.user.email,
+          status: 'active', nda_version: ndaVersion || 'v1', acknowledged_at: nowISO(), granted_at: nowISO() };
+        const r = await sb('/rest/v1/deal_room_access?on_conflict=property_id,user_id', { method: 'POST', body: row, prefer: 'resolution=merge-duplicates,return=representation' });
+        try { await sbDB.dealroom.log(propertyId, 'acknowledged', null); } catch {}
+        return (r && r[0]) ? toAccess(r[0]) : null; },
+      async clearedDocs(propertyId) { return (await sb('/rest/v1/listing_documents?property_id=eq.' + propertyId + '&status=eq.cleared&order=doc_key&select=*')).map(toDoc); },
+      async log(propertyId, event, docKey) { const s = getSession(); if (!s) return;
+        try { return await sb('/rest/v1/deal_room_events', { method: 'POST', body: { property_id: propertyId, user_id: s.user.id, user_email: s.user.email, event, doc_key: docKey || null } }); } catch {} },
+      async listAccess() { return (await sb('/rest/v1/deal_room_access?order=created_at.desc&select=*')).map(toAccess); },
+      async listEvents(propertyId) { return (await sb('/rest/v1/deal_room_events?property_id=eq.' + propertyId + '&order=created_at.desc&select=*')).map(toEvent); },
+      async revoke(id) { const s = getSession(); return sb('/rest/v1/deal_room_access?id=eq.' + id, { method: 'PATCH', body: { status: 'revoked', revoked_at: nowISO(), revoked_by: s.user.id }, prefer: 'return=representation' }); },
+      async reinstate(id) { return sb('/rest/v1/deal_room_access?id=eq.' + id, { method: 'PATCH', body: { status: 'active', revoked_at: null }, prefer: 'return=representation' }); },
+    },
   };
 
   // ================= LOCAL FALLBACK MODE (no keys) =================
-  const L = { acc: 'codev_accounts', prop: 'codev_properties', sess: 'codev_session', seed: 'codev_seeded_v1', docs: 'codev_docs' };
+  const L = { acc: 'codev_accounts', prop: 'codev_properties', sess: 'codev_session', seed: 'codev_seeded_v1', docs: 'codev_docs', dra: 'codev_dra', dre: 'codev_dre' };
   const rd = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
   const wr = (k, v) => localStorage.setItem(k, JSON.stringify(v));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -369,6 +394,21 @@ window.CODEV = (function () {
       async review(id, { status, note }) { const list = rd(L.docs, []); const i = list.findIndex(d => d.id === id); if (i < 0) return;
         list[i] = { ...list[i], status, note: note || '', reviewedAt: nowISO(), reviewedBy: (rd(L.sess, null) || {}).id }; wr(L.docs, list); return list[i]; },
       async remove(id) { wr(L.docs, rd(L.docs, []).filter(d => d.id !== id)); },
+    },
+    dealroom: {
+      async isVerifiedBuyer(pid) { const s = rd(L.sess, null); if (!s) return false; return rd('codev_qualifications', []).some(q => q.property_id === pid && q.user_id === s.id && q.status === 'codev_verified'); },
+      async myAccess(pid) { const s = rd(L.sess, null); if (!s) return null; return rd(L.dra, []).find(a => a.propertyId === pid && a.userId === s.id) || null; },
+      async acknowledge(pid, ndaVersion) { const s = rd(L.sess, null); const list = rd(L.dra, []); const i = list.findIndex(a => a.propertyId === pid && a.userId === (s && s.id));
+        if (i >= 0 && list[i].status !== 'active') return list[i]; // revoked/expired can't self-reactivate
+        const rec = { id: (i >= 0 ? list[i].id : uid()), propertyId: pid, userId: s && s.id, userEmail: s && s.email, userName: s && s.name,
+          status: 'active', ndaVersion: ndaVersion || 'v1', acknowledgedAt: nowISO(), grantedAt: (i >= 0 ? list[i].grantedAt : nowISO()), createdAt: (i >= 0 ? list[i].createdAt : nowISO()) };
+        if (i >= 0) list[i] = rec; else list.unshift(rec); wr(L.dra, list); await this.log(pid, 'acknowledged', null); return rec; },
+      async clearedDocs(pid) { const acc = await this.myAccess(pid); if (!acc || acc.status !== 'active' || !acc.acknowledgedAt) return []; if (!await this.isVerifiedBuyer(pid)) return []; return rd(L.docs, []).filter(d => d.propertyId === pid && d.status === 'cleared'); },
+      async log(pid, event, docKey) { const s = rd(L.sess, null); const list = rd(L.dre, []); list.unshift({ id: uid(), propertyId: pid, userId: s && s.id, userEmail: s && s.email, event, docKey: docKey || '', createdAt: nowISO() }); wr(L.dre, list); },
+      async listAccess() { return rd(L.dra, []); },
+      async listEvents(pid) { return rd(L.dre, []).filter(e => e.propertyId === pid); },
+      async revoke(id) { const list = rd(L.dra, []); const i = list.findIndex(a => a.id === id); if (i < 0) return; list[i] = { ...list[i], status: 'revoked', revokedAt: nowISO() }; wr(L.dra, list); return list[i]; },
+      async reinstate(id) { const list = rd(L.dra, []); const i = list.findIndex(a => a.id === id); if (i < 0) return; list[i] = { ...list[i], status: 'active', revokedAt: null }; wr(L.dra, list); return list[i]; },
     },
   };
 
