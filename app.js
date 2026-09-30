@@ -289,7 +289,7 @@
             <p class="tiny muted" style="margin-top:8px">Complete a short investor qualification. CoDev verifies applicants before granting Deal Room access to confidential project documents.</p></div></div></section>`; },
     how() { const steps = [['List', 'A developer or property owner submits a development or plot.'], ['Verify', 'Admin reviews and verifies the listing before it goes public.'], ['Co-develop', 'Investors browse verified opportunities and express interest.'], ['Govern', 'Milestone-based structure with timelines & payments; funds are released through licensed escrow partners against verified construction milestones.']];
       return sec('How it works', 'From listing to verification to co-development.', `<div class="grid g2">${steps.map((s, i) => `<div class="card pad row" style="gap:14px;align-items:flex-start"><span class="step-n">${i + 1}</span><div><h3 style="margin:0 0 4px;font-size:18px">${s[0]}</h3><p class="small muted" style="margin:0">${s[1]}</p></div></div>`).join('')}</div>`); },
-    list(u, mine) { listingPhotos = []; listingItems = [{ type: '', bedrooms: '', landSqm: '', landSqft: '', price: '' }];
+    list(u, mine) { listingPhotos = []; listingItems = [{ type: '', bedrooms: '', landSqm: '', landSqft: '', price: '' }]; listingDocs = {};
       return sec('List a property', 'Developers and property owners can list here. Submissions are verified by admin before they go public.',
       `<div class="grid g2" style="align-items:start">
         <form class="card pad" onsubmit="return CODEVAPP.submitProperty(event)">
@@ -309,6 +309,8 @@
           <div class="field"><label>Photos <span class="tiny muted">— up to ${MAX_PHOTOS}, from your phone or computer</span></label>
             <label class="photo-drop"><input type="file" accept="image/*,.heic,.heif" multiple onchange="CODEVAPP.addPhotos(this)"><span class="pd-inner">📷 Tap to add photos or take a picture</span></label>
             <div id="photoPreviews" class="photo-grid"></div></div>
+          <div class="field"><label>Assurance documents <span class="tiny muted">— attach the key documents for CoDev legal review (you can also add or replace them later)</span></label>
+            <div id="listingDocsBox" class="grid" style="gap:8px">${listingDocsHtml()}</div></div>
           <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Participation from (₦)</label><input name="priceFrom" type="number" min="0" required></div>
             <div class="field" style="flex:1"><label>Construction stage</label><select name="stage">${CFG.STAGES.map(x => `<option>${x}</option>`).join('')}</select></div></div>
           <button class="btn primary" style="width:100%">Submit for verification</button>
@@ -393,6 +395,15 @@
   function delItemDev(i) { listingItems.splice(i, 1); renderItemsDev(); }
   function itemSetDev(i, k, v) { listingItems[i][k] = v; if (k === 'type') { listingItems[i].bedrooms = ''; listingItems[i].landSqm = ''; listingItems[i].landSqft = ''; renderItemsDev(); } }
   function itemSizeDev(i, k, v) { listingItems[i][k] = v; const A = 10.7639; const other = k === 'landSqm' ? 'landSqft' : 'landSqm'; listingItems[i][other] = v ? String(Math.round(k === 'landSqm' ? Number(v) * A : Number(v) / A)) : ''; const el = document.querySelector(`#itemRowsDev .card:nth-child(${i + 1}) input[oninput*="'${other}'"]`); if (el) el.value = listingItems[i][other]; }
+  // ---- Assurance documents staged during listing creation (uploaded after the listing is created) ----
+  let listingDocs = {};
+  function listingDocsHtml() { return (CFG.REQUIRED_DOCS || []).map(t => { const d = listingDocs[t.key];
+    return `<div class="card pad" style="background:var(--soft)"><div class="spread"><span class="small">${esc(t.label)}</span>${d ? `<span class="badge pending">Attached</span>` : `<span class="tiny muted">Optional now</span>`}</div>
+      ${d ? `<div class="tiny muted" style="margin-top:4px">📎 ${esc(d.fileName)}</div>` : ''}
+      <label class="photo-drop" style="margin-top:8px;min-height:56px"><input type="file" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.heic,.heif" onchange="CODEVAPP.stageDoc('${t.key}',this)"><span class="pd-inner" style="font-size:13px">📤 ${d ? 'Replace' : 'Attach'} document (PDF or image, max 6MB)</span></label></div>`; }).join(''); }
+  function renderListingDocs() { const box = document.getElementById('listingDocsBox'); if (box) box.innerHTML = listingDocsHtml(); }
+  async function stageDoc(key, input) { const f = input.files && input.files[0]; input.value = ''; if (!f) return; if (f.size > 6 * 1024 * 1024) { toast('File too large — max 6MB'); return; }
+    try { const dataUrl = await fileToDataURL(f); listingDocs[key] = { fileData: dataUrl, fileName: f.name, fileType: f.type }; renderListingDocs(); } catch (e) { toast('Could not read file'); } }
   function buyerTxCard(pid, t) { const issued = (t.documents || []).filter(d => d.fileData);
     return `<div class="card pad"><div class="spread"><div><b>${esc(TX_TYPE_LBL[t.txType] || t.txType)}</b>${t.amount ? ` · <span class="serif" style="color:var(--bronze)">${fmtN(t.amount)}</span>` : ''}</div>${txStatusBadge(t.status)}</div>
       ${issued.length ? `<div class="tiny muted" style="margin-top:8px">Documents from CoDev:</div>${issued.map(d => `<div class="spread" style="padding:4px 0"><span class="small">${esc(d.title || d.docType || 'Document')}</span><a class="btn ghost sm" href="${d.fileData}" download="${esc(d.fileName || 'document')}">Download</a></div>`).join('')}` : ''}
@@ -512,10 +523,15 @@
 
   async function submitProperty(e) { e.preventDefault(); const f = e.target; const u = me();
     const btn = f.querySelector('button[type=submit],button:not([type])'); if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
-    try { await db.properties.add({ title: f.title.value.trim(), developer: f.developer.value.trim(), location: f.location.value.trim(), address: f.address.value.trim(), items: (listingItems || []).filter(it => it.type), units: f.units.value, deliveryDate: f.deliveryDate.value, summary: f.summary.value.trim(), priceFrom: Number(f.priceFrom.value), stage: f.stage.value, images: listingPhotos.slice() });
+    try { const created = await db.properties.add({ title: f.title.value.trim(), developer: f.developer.value.trim(), location: f.location.value.trim(), address: f.address.value.trim(), items: (listingItems || []).filter(it => it.type), units: f.units.value, deliveryDate: f.deliveryDate.value, summary: f.summary.value.trim(), priceFrom: Number(f.priceFrom.value), stage: f.stage.value, images: listingPhotos.slice() });
+      // Upload any documents attached during creation, now that the listing has an id.
+      const newId = Array.isArray(created) ? (created[0] && created[0].id) : (created && created.id);
+      const staged = Object.keys(listingDocs || {});
+      if (newId && staged.length) { for (const key of staged) { const label = ((CFG.REQUIRED_DOCS || []).find(t => t.key === key) || {}).label || key;
+        try { await db.documents.submit(newId, { key, label, fileData: listingDocs[key].fileData, fileName: listingDocs[key].fileName, fileType: listingDocs[key].fileType }); } catch (e) {} } }
       if (CFG.imagesUnavailable) toast('Listing submitted. (Photos need a quick backend setup before they save — see admin.)');
-      else toast('Submitted! Admin will verify it before it goes public.');
-      listingPhotos = []; renderPhotoPreviews();
+      else toast('Submitted! Admin will verify it before it goes public.' + (staged.length ? ' Documents attached.' : ''));
+      listingPhotos = []; renderPhotoPreviews(); listingDocs = {};
       const mine = await db.properties.listMine(); const box = document.getElementById('mySubs'); if (box) box.innerHTML = listCards(mine);
       f.reset(); f.developer.value = u.name;
     } catch (err) { toast(err.message || 'Could not submit'); }
@@ -667,7 +683,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, enterDealRoom, logDeal, onTypeChange, addItemDev, delItemDev, itemSetDev, itemSizeDev, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, stageDoc, enterDealRoom, logDeal, onTypeChange, addItemDev, delItemDev, itemSetDev, itemSizeDev, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
   // Session timeout → clean logout + re-login prompt (fired by the data layer on an expired JWT).
   window.addEventListener('codev:session-expired', () => {
     renderAuthArea();
