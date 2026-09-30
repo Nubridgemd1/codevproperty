@@ -127,6 +127,9 @@ window.CODEV = (function () {
     status: r.status || 'active', ndaVersion: r.nda_version || '', acknowledgedAt: r.acknowledged_at || null,
     grantedAt: r.granted_at || null, expiresAt: r.expires_at || null, revokedAt: r.revoked_at || null, createdAt: r.created_at || null });
   const toEvent = (r) => ({ id: r.id, propertyId: r.property_id, userId: r.user_id, userEmail: r.user_email, event: r.event, docKey: r.doc_key || '', createdAt: r.created_at || null });
+  const toQuery = (r) => ({ id: r.id, propertyId: r.property_id, authorId: r.author_id, authorEmail: r.author_email, authorKind: r.author_kind, body: r.body, status: r.status, createdAt: r.created_at });
+  const toReport = (r) => ({ id: r.id, propertyId: r.property_id, version: r.version, scope: r.scope || '', disposition: r.disposition, summary: r.summary || '', conditions: r.conditions || '', issuedAt: r.issued_at, issuedBy: r.issued_by });
+  const toTx = (r) => ({ id: r.id, propertyId: r.property_id, userId: r.user_id, userEmail: r.user_email, userName: r.user_name, txType: r.tx_type, status: r.status, amount: r.amount, currency: r.currency, documents: Array.isArray(r.documents) ? r.documents : [], fundingEvidence: r.funding_evidence || '', fundingNote: r.funding_note || '', completionRef: r.completion_ref || '', completionNote: r.completion_note || '', completedAt: r.completed_at, createdAt: r.created_at });
   const toAcc = (r) => ({ id: r.id, name: r.name, email: r.email, role: r.role, status: r.status, createdAt: r.created_at,
     permissions: Array.isArray(r.permissions) ? r.permissions : [],
     about: r.about || '', website: r.website || '', phone: r.phone || '', brochure: r.brochure || '' });
@@ -316,10 +319,46 @@ window.CODEV = (function () {
       async revoke(id) { const s = getSession(); return sb('/rest/v1/deal_room_access?id=eq.' + id, { method: 'PATCH', body: { status: 'revoked', revoked_at: nowISO(), revoked_by: s.user.id }, prefer: 'return=representation' }); },
       async reinstate(id) { return sb('/rest/v1/deal_room_access?id=eq.' + id, { method: 'PATCH', body: { status: 'active', revoked_at: null }, prefer: 'return=representation' }); },
     },
+    // ---- Legal queries thread (see TRANSACTIONS.sql) ----
+    legalQueries: {
+      async list(pid) { return (await sb('/rest/v1/legal_queries?property_id=eq.' + pid + '&order=created_at.asc&select=*')).map(toQuery); },
+      async add(pid, body, kind) { const s = getSession(); const row = { property_id: pid, author_id: s.user.id, author_email: s.user.email, author_kind: kind, body, status: 'open' };
+        return (await sb('/rest/v1/legal_queries', { method: 'POST', body: row, prefer: 'return=representation' })).map(toQuery)[0]; },
+      async resolve(id, resolved) { return sb('/rest/v1/legal_queries?id=eq.' + id, { method: 'PATCH', body: { status: resolved ? 'resolved' : 'open' }, prefer: 'return=representation' }); },
+    },
+    // ---- Versioned counsel report ----
+    legalReports: {
+      async list(pid) { return (await sb('/rest/v1/legal_reports?property_id=eq.' + pid + '&order=version.desc&select=*')).map(toReport); },
+      async latest(pid) { const r = await sb('/rest/v1/legal_reports?property_id=eq.' + pid + '&order=version.desc&limit=1&select=*'); return (r && r[0]) ? toReport(r[0]) : null; },
+      async issue(pid, rep) { const s = getSession(); const latest = await this.latest(pid); const version = (latest ? latest.version : 0) + 1;
+        const row = { property_id: pid, version, scope: rep.scope || null, disposition: rep.disposition, summary: rep.summary || null, conditions: rep.conditions || null, issued_by: s.user.id, issued_at: nowISO() };
+        return (await sb('/rest/v1/legal_reports', { method: 'POST', body: row, prefer: 'return=representation' })).map(toReport)[0]; },
+    },
+    // ---- Transactions & completion ----
+    transactions: {
+      async listAll() { return (await sb('/rest/v1/transactions?order=created_at.desc&select=*')).map(toTx); },
+      async listForProperty(pid) { return (await sb('/rest/v1/transactions?property_id=eq.' + pid + '&order=created_at.desc&select=*')).map(toTx); },
+      async listMine() { const s = getSession(); if (!s) return []; return (await sb('/rest/v1/transactions?user_id=eq.' + s.user.id + '&order=created_at.desc&select=*')).map(toTx); },
+      async listMineForProperty(pid) { const s = getSession(); if (!s) return []; return (await sb('/rest/v1/transactions?property_id=eq.' + pid + '&user_id=eq.' + s.user.id + '&order=created_at.desc&select=*')).map(toTx); },
+      async create(tx) { const s = getSession(); const row = { property_id: tx.propertyId, user_id: tx.userId, user_email: tx.userEmail || null, user_name: tx.userName || null,
+          tx_type: tx.txType, status: 'initiated', amount: (tx.amount === '' || tx.amount == null) ? null : Number(tx.amount), currency: tx.currency || 'NGN', created_by: s.user.id };
+        return (await sb('/rest/v1/transactions', { method: 'POST', body: row, prefer: 'return=representation' })).map(toTx)[0]; },
+      async update(id, patch) { const row = { updated_at: nowISO() };
+        if ('status' in patch) row.status = patch.status;
+        if ('amount' in patch) row.amount = (patch.amount === '' || patch.amount == null) ? null : Number(patch.amount);
+        if ('currency' in patch) row.currency = patch.currency;
+        if ('documents' in patch) row.documents = patch.documents;
+        if ('fundingEvidence' in patch) row.funding_evidence = patch.fundingEvidence;
+        if ('fundingNote' in patch) row.funding_note = patch.fundingNote;
+        if ('completionRef' in patch) row.completion_ref = patch.completionRef;
+        if ('completionNote' in patch) row.completion_note = patch.completionNote;
+        if ('completedAt' in patch) row.completed_at = patch.completedAt;
+        return (await sb('/rest/v1/transactions?id=eq.' + id, { method: 'PATCH', body: row, prefer: 'return=representation' })).map(toTx)[0]; },
+    },
   };
 
   // ================= LOCAL FALLBACK MODE (no keys) =================
-  const L = { acc: 'codev_accounts', prop: 'codev_properties', sess: 'codev_session', seed: 'codev_seeded_v1', docs: 'codev_docs', dra: 'codev_dra', dre: 'codev_dre' };
+  const L = { acc: 'codev_accounts', prop: 'codev_properties', sess: 'codev_session', seed: 'codev_seeded_v1', docs: 'codev_docs', dra: 'codev_dra', dre: 'codev_dre', lq: 'codev_lq', lr: 'codev_lr', tx: 'codev_tx' };
   const rd = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
   const wr = (k, v) => localStorage.setItem(k, JSON.stringify(v));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -409,6 +448,26 @@ window.CODEV = (function () {
       async listEvents(pid) { return rd(L.dre, []).filter(e => e.propertyId === pid); },
       async revoke(id) { const list = rd(L.dra, []); const i = list.findIndex(a => a.id === id); if (i < 0) return; list[i] = { ...list[i], status: 'revoked', revokedAt: nowISO() }; wr(L.dra, list); return list[i]; },
       async reinstate(id) { const list = rd(L.dra, []); const i = list.findIndex(a => a.id === id); if (i < 0) return; list[i] = { ...list[i], status: 'active', revokedAt: null }; wr(L.dra, list); return list[i]; },
+    },
+    legalQueries: {
+      async list(pid) { return rd(L.lq, []).filter(q => q.propertyId === pid).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))); },
+      async add(pid, body, kind) { const s = rd(L.sess, null); const list = rd(L.lq, []); const rec = { id: uid(), propertyId: pid, authorId: s && s.id, authorEmail: s && s.email, authorKind: kind, body, status: 'open', createdAt: nowISO() }; list.push(rec); wr(L.lq, list); return rec; },
+      async resolve(id, resolved) { const list = rd(L.lq, []); const i = list.findIndex(q => q.id === id); if (i < 0) return; list[i] = { ...list[i], status: resolved ? 'resolved' : 'open' }; wr(L.lq, list); return list[i]; },
+    },
+    legalReports: {
+      async list(pid) { return rd(L.lr, []).filter(r => r.propertyId === pid).sort((a, b) => b.version - a.version); },
+      async latest(pid) { const l = (await this.list(pid)); return l[0] || null; },
+      async issue(pid, rep) { const s = rd(L.sess, null); const list = rd(L.lr, []); const latest = list.filter(r => r.propertyId === pid).sort((a, b) => b.version - a.version)[0];
+        const rec = { id: uid(), propertyId: pid, version: (latest ? latest.version : 0) + 1, scope: rep.scope || '', disposition: rep.disposition, summary: rep.summary || '', conditions: rep.conditions || '', issuedBy: s && s.id, issuedAt: nowISO() };
+        list.unshift(rec); wr(L.lr, list); return rec; },
+    },
+    transactions: {
+      async listAll() { return rd(L.tx, []); },
+      async listForProperty(pid) { return rd(L.tx, []).filter(t => t.propertyId === pid); },
+      async listMine() { const s = rd(L.sess, null); return s ? rd(L.tx, []).filter(t => t.userId === s.id) : []; },
+      async listMineForProperty(pid) { const s = rd(L.sess, null); return s ? rd(L.tx, []).filter(t => t.propertyId === pid && t.userId === s.id) : []; },
+      async create(tx) { const s = rd(L.sess, null); const list = rd(L.tx, []); const rec = { id: uid(), propertyId: tx.propertyId, userId: tx.userId, userEmail: tx.userEmail || '', userName: tx.userName || '', txType: tx.txType, status: 'initiated', amount: (tx.amount === '' || tx.amount == null) ? null : Number(tx.amount), currency: tx.currency || 'NGN', documents: [], fundingEvidence: '', fundingNote: '', completionRef: '', completionNote: '', completedAt: null, createdBy: s && s.id, createdAt: nowISO() }; list.unshift(rec); wr(L.tx, list); return rec; },
+      async update(id, patch) { const list = rd(L.tx, []); const i = list.findIndex(t => t.id === id); if (i < 0) return; list[i] = { ...list[i], ...patch, updatedAt: nowISO() }; wr(L.tx, list); return list[i]; },
     },
   };
 

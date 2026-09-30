@@ -4,14 +4,14 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CoDev — Admin Console</title>
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=7" />
-<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=7" />
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=7" />
-<link rel="shortcut icon" href="favicon-32.png?v=7" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=8" />
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=8" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=8" />
+<link rel="shortcut icon" href="favicon-32.png?v=8" />
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=7" />
+<link rel="stylesheet" href="styles.css?v=8" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -50,7 +50,7 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=7"></script>
+<script src="data.js?v=8"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
@@ -219,7 +219,9 @@
     const byProp={}; DOCS.forEach(d=>{ (byProp[d.propertyId]=byProp[d.propertyId]||[]).push(d); });
     const cards=(PROPS||[]).map(p=>{ const list=byProp[p.id]||[]; const rows=mergeDocsAdmin(list).map(r=>legalDocRow(p,r)).join('');
       return `<div class="card pad" style="margin-bottom:14px"><div class="spread"><div><b>${esc(p.title)}</b>${p.ref?` <span class="badge role" style="font-family:monospace">${esc(p.ref)}</span>`:''}<div class="tiny muted">${esc(p.developer||'')} · ${esc(p.location||'')} · <span class="badge ${p.status}">${p.status}</span></div></div>${docSummaryChip(list)}</div>
-      <div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Document</th><th>File</th><th>Decision</th><th>Note</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${dealAccessBlock(p)}</div>`;
+      <div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Document</th><th>File</th><th>Decision</th><th>Note</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn ghost sm" onclick="ADMIN.openQueries('${p.id}')">💬 Legal queries</button><button class="btn ghost sm" onclick="ADMIN.openReport('${p.id}')">📝 Counsel report</button><button class="btn ghost sm" onclick="ADMIN.openTx('${p.id}')">💼 Transactions</button></div>
+      ${dealAccessBlock(p)}</div>`;
     }).join('');
     return `<div class="card pad" style="margin-bottom:16px"><b>Legal review &amp; due diligence</b><p class="tiny muted" style="margin:6px 0 0">Review each listing's key documents and set a verification decision. Buyers see the status on the listing; files are visible only to legal &amp; admins. Admins can publish a listing even while documents are awaiting or under review.</p></div>${cards||'<div class="card pad muted">No listings yet.</div>'}`;
   }
@@ -241,6 +243,56 @@
   async function dealLog(pid){ $('#mTitle').textContent='Deal Room access log'; $('#mBody').innerHTML='<div class="muted">Loading…</div>'; $('#modal').classList.add('show');
     try{ const ev=await db.dealroom.listEvents(pid); $('#mBody').innerHTML= ev.length? `<div style="max-height:60vh;overflow:auto"><table><thead><tr><th>When</th><th>Who</th><th>Event</th><th>Doc</th></tr></thead><tbody>${ev.map(e=>`<tr><td class="tiny">${esc(new Date(e.createdAt).toLocaleString())}</td><td class="tiny">${esc(e.userEmail||'—')}</td><td><span class="badge role">${esc(e.event)}</span></td><td class="tiny muted">${esc(e.docKey||'')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="muted">No access events yet.</div>'; }
     catch(e){ $('#mBody').innerHTML='<div class="muted">Could not load the log.</div>'; } }
+
+  // ---------- Legal queries · counsel report · transactions ----------
+  const DISPO_LBL={cleared:'Cleared',conditional:'Conditionally cleared',material_issue:'Material issue',rejected:'Rejected'};
+  const TXT={reservation:'Reservation',sale:'Sale / purchase',subscription:'SPV subscription',jv:'Joint venture'};
+  const TXS={initiated:'Initiated',documents_issued:'Documents issued',buyer_signed:'Buyer signed',countersigned:'Countersigned',funded:'Funded',completed:'Completed',cancelled:'Cancelled'};
+  const txBadge=(s)=>{ const c=s==='completed'?'verified':s==='cancelled'?'rejected':'pending'; return `<span class="badge ${c}">${esc(TXS[s]||s)}</span>`; };
+  function fileToDataURLA(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(new Error('Could not read file')); r.readAsDataURL(file); }); }
+
+  async function openQueries(pid){ const p=PROPS.find(x=>x.id===pid)||{}; $('#mTitle').textContent='Legal queries — '+(p.title||''); $('#mBody').innerHTML='<div class="muted">Loading…</div>'; $('#modal').classList.add('show');
+    try{ const qs=await db.legalQueries.list(pid); $('#mBody').innerHTML=`<div style="max-height:50vh;overflow:auto">${qs.length?qs.map(q=>`<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div class="tiny muted spread"><span><b>${q.authorKind==='counsel'?'CoDev Counsel':'Developer'}</b> · ${esc(new Date(q.createdAt).toLocaleString())}</span><span>${q.status==='resolved'?'<span class="badge verified">resolved</span>':`<button class="btn ghost sm" onclick="ADMIN.resolveQuery('${q.id}','${pid}')">Mark resolved</button>`}</span></div><div class="small" style="margin-top:3px;white-space:pre-wrap">${esc(q.body)}</div></div>`).join(''):'<div class="tiny muted">No queries yet.</div>'}</div>
+      <div class="row" style="gap:8px;margin-top:12px;align-items:flex-start"><textarea id="clQuery" rows="2" placeholder="Post a query to the developer…" style="flex:1"></textarea><button class="btn primary sm" onclick="ADMIN.postCounselQuery('${pid}')">Post</button></div>`;
+    }catch(e){ $('#mBody').innerHTML='<div class="muted">Could not load queries. Run TRANSACTIONS.sql if you have not.</div>'; } }
+  async function postCounselQuery(pid){ const el=document.getElementById('clQuery'); const body=(el&&el.value.trim())||''; if(!body){toast('Enter a query');return;} try{ await db.legalQueries.add(pid,body,'counsel'); toast('Posted'); openQueries(pid); }catch(e){toast(e.message||'Failed');} }
+  async function resolveQuery(id,pid){ try{ await db.legalQueries.resolve(id,true); openQueries(pid); }catch(e){toast(e.message||'Failed');} }
+
+  async function openReport(pid){ const p=PROPS.find(x=>x.id===pid)||{}; $('#mTitle').textContent='Counsel report — '+(p.title||''); $('#mBody').innerHTML='<div class="muted">Loading…</div>'; $('#modal').classList.add('show');
+    try{ const list=await db.legalReports.list(pid); const next=(list[0]?list[0].version:0)+1; $('#mBody').innerHTML=`
+      <div class="field"><label>Scope of review</label><input id="rpScope" placeholder="e.g. Title, land rights, party authority, approvals, JV/SPV"></div>
+      <div class="field"><label>Disposition</label><select id="rpDispo">${[['cleared','Cleared'],['conditional','Conditionally cleared'],['material_issue','Material issue'],['rejected','Rejected']].map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('')}</select></div>
+      <div class="field"><label>Summary (assurance statement — visible to the developer &amp; verified buyers)</label><textarea id="rpSummary" rows="2"></textarea></div>
+      <div class="field"><label>Conditions / limitations</label><textarea id="rpConditions" rows="2"></textarea></div>
+      <button class="btn primary" style="width:100%" onclick="ADMIN.issueReport('${pid}')">Issue report (v${next})</button>
+      <div style="margin-top:14px"><div class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.04em">Version history</div>${list.length?list.map(r=>`<div style="padding:6px 0;border-top:1px solid var(--line)"><span class="small"><b>v${r.version}</b> · ${esc(DISPO_LBL[r.disposition]||r.disposition)} · ${esc(new Date(r.issuedAt).toLocaleDateString())}</span>${r.scope?`<div class="tiny muted">${esc(r.scope)}</div>`:''}${r.conditions?`<div class="tiny">Conditions: ${esc(r.conditions)}</div>`:''}</div>`).join(''):'<div class="tiny muted" style="margin-top:4px">No reports issued yet.</div>'}</div>`;
+    }catch(e){ $('#mBody').innerHTML='<div class="muted">Could not load. Run TRANSACTIONS.sql if you have not.</div>'; } }
+  async function issueReport(pid){ const rep={ scope:$('#rpScope').value.trim(), disposition:$('#rpDispo').value, summary:$('#rpSummary').value.trim(), conditions:$('#rpConditions').value.trim() };
+    try{ await db.legalReports.issue(pid,rep); toast('Report issued'); openReport(pid); }catch(e){ toast(e.message||'Failed'); } }
+
+  async function openTx(pid){ const p=PROPS.find(x=>x.id===pid)||{}; $('#mTitle').textContent='Transactions — '+(p.title||''); $('#mBody').innerHTML='<div class="muted">Loading…</div>'; $('#modal').classList.add('show');
+    try{ const txs=await db.transactions.listForProperty(pid); let quals=[]; try{ quals=(await db.qualifications.listAll()).filter(q=>q.property_id===pid && q.status==='codev_verified'); }catch{}
+      $('#mBody').innerHTML=`<div class="card pad" style="background:var(--soft);margin-bottom:12px"><div class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">New transaction</div>
+        <div class="row" style="gap:8px;flex-wrap:wrap"><select id="txBuyer" style="flex:2;min-width:180px"><option value="">Verified buyer…</option>${quals.map(q=>`<option value="${esc(q.user_id)}|${esc(q.user_email||'')}|${esc(String(q.user_name||'').replace(/\|/g,' '))}">${esc(q.user_name||q.user_email)}</option>`).join('')}</select>
+          <select id="txType" style="flex:1;min-width:140px">${Object.entries(TXT).map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('')}</select>
+          <input id="txAmount" type="number" placeholder="Amount (₦)" style="flex:1;min-width:120px"><button class="btn primary sm" onclick="ADMIN.createTx('${pid}')">Create</button></div>
+        ${quals.length?'':'<div class="tiny muted" style="margin-top:6px">No CoDev-verified buyers for this listing yet — verify a buyer in the Investors pipeline first.</div>'}</div>
+        <div class="grid" style="gap:10px">${txs.length?txs.map(t=>adminTxCard(t)).join(''):'<div class="tiny muted">No transactions yet.</div>'}</div>`;
+    }catch(e){ $('#mBody').innerHTML='<div class="muted">Could not load transactions. Run TRANSACTIONS.sql if you have not.</div>'; } }
+  function adminTxCard(t){ const st=t.status;
+    return `<div class="card pad"><div class="spread"><div><b>${esc(t.userName||t.userEmail||'Buyer')}</b> · ${esc(TXT[t.txType]||t.txType)}${t.amount?` · ₦${Number(t.amount).toLocaleString()}`:''}</div>${txBadge(st)}</div>
+      <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center"><select id="txs_${t.id}">${Object.keys(TXS).map(s=>`<option value="${s}" ${s===st?'selected':''}>${esc(TXS[s])}</option>`).join('')}</select><button class="btn ghost sm" onclick="ADMIN.setTxStatus('${t.id}','${t.propertyId}')">Update status</button><label class="btn ghost sm" style="cursor:pointer">📎 Attach document<input type="file" accept="application/pdf,image/*" style="display:none" onchange="ADMIN.txAttach('${t.id}','${t.propertyId}',this)"></label></div>
+      ${(t.documents||[]).length?`<div class="tiny muted" style="margin-top:8px">Documents:</div>${(t.documents||[]).map(d=>`<div class="spread" style="padding:3px 0"><span class="small">${esc(d.title||d.docType)}${d.docType==='signed'?' <span class="badge role">buyer-signed</span>':''}</span>${d.fileData?`<a class="btn ghost sm" href="${d.fileData}" download="${esc(d.fileName||'document')}">Download</a>`:''}</div>`).join('')}`:''}
+      ${t.fundingEvidence?`<div class="small" style="margin-top:6px">💳 Funding evidence: <a href="${t.fundingEvidence}" download="funding-evidence">download</a>${t.fundingNote?' · '+esc(t.fundingNote):''}</div>`:''}
+      ${t.completedAt?`<div class="small" style="margin-top:8px;color:var(--green)"><b>Completed &amp; archived</b> ${esc(new Date(t.completedAt).toLocaleDateString())}${t.completionRef?' · Ref '+esc(t.completionRef):''}${t.completionNote?'<div class="tiny muted">'+esc(t.completionNote)+'</div>':''}</div>`:`
+      <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><input id="txcr_${t.id}" placeholder="Completion ref" style="flex:1;min-width:120px"><input id="txcn_${t.id}" placeholder="Completion note" style="flex:2;min-width:150px"><button class="btn sm navy" onclick="ADMIN.completeTx('${t.id}','${t.propertyId}')">Mark completed &amp; archive</button></div>`}
+    </div>`; }
+  async function createTx(pid){ const b=$('#txBuyer').value; if(!b){toast('Pick a verified buyer');return;} const parts=b.split('|'); const txType=$('#txType').value; const amount=$('#txAmount').value;
+    try{ await db.transactions.create({propertyId:pid,userId:parts[0],userEmail:parts[1]||'',userName:parts[2]||'',txType,amount}); toast('Transaction created'); openTx(pid); }catch(e){toast(e.message||'Failed');} }
+  async function setTxStatus(id,pid){ const st=document.getElementById('txs_'+id).value; try{ await db.transactions.update(id,{status:st}); toast('Updated'); openTx(pid); }catch(e){toast(e.message||'Failed');} }
+  async function txAttach(id,pid,input){ const f=input.files&&input.files[0]; input.value=''; if(!f)return; if(f.size>6*1024*1024){toast('File too large — max 6MB');return;}
+    try{ const dataUrl=await fileToDataURLA(f); const cur=(await db.transactions.listForProperty(pid)).find(x=>x.id===id)||{documents:[]}; const documents=(cur.documents||[]).concat([{docType:'issued',title:f.name,fileData:dataUrl,fileName:f.name,status:'issued',issuedAt:new Date().toISOString()}]); await db.transactions.update(id,{documents,status:cur.status==='initiated'?'documents_issued':cur.status}); toast('Attached'); openTx(pid); }catch(e){toast(e.message||'Failed');} }
+  async function completeTx(id,pid){ const ref=$('#txcr_'+id).value.trim(); const note=$('#txcn_'+id).value.trim(); try{ await db.transactions.update(id,{status:'completed',completionRef:ref,completionNote:note,completedAt:window.CODEV.now()}); toast('Transaction completed & archived'); openTx(pid); }catch(e){toast(e.message||'Failed');} }
 
   function adminPropLocations(){ const s=new Set(); PROPS.forEach(p=>{ const l=(p.location||'').trim(); if(l) s.add(l); }); return Array.from(s).sort((a,b)=>a.localeCompare(b)); }
   function propRowsHtml(list){
@@ -486,7 +538,7 @@
   async function delAcc(id){ const a=ACCS.find(x=>x.id===id); if(confirm('Delete account "'+(a.name||a.email)+'"?')){ try{ await db.profiles.remove(id); toast('Account deleted'); await load(); }catch(err){toast(err.message);} } }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,copyRef,reviewDoc,revokeAccess,reinstateAccess,dealLog,admAccess,delProp,editProp,saveProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+  window.ADMIN={login,lock,tab,setStatus,copyRef,reviewDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,admAccess,delProp,editProp,saveProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
     addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps};
 
   // Session timeout in the admin console → message, then back to the sign-in gate.

@@ -14,6 +14,17 @@
     return rows;
   }
   function fileToDataURL(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('Could not read file')); r.readAsDataURL(file); }); }
+  // ---- Legal report + queries + transactions (shared render) ----
+  const DISPO_LBL = { cleared: 'Cleared', conditional: 'Conditionally cleared', material_issue: 'Material issue', rejected: 'Rejected' };
+  const TX_TYPE_LBL = { reservation: 'Reservation', sale: 'Sale / purchase', subscription: 'SPV subscription', jv: 'Joint venture' };
+  const TX_STATUS_LBL = { initiated: 'Initiated', documents_issued: 'Documents issued', buyer_signed: 'Buyer signed', countersigned: 'Countersigned', funded: 'Funded', completed: 'Completed', cancelled: 'Cancelled' };
+  const txStatusBadge = (s) => { const c = s === 'completed' ? 'verified' : s === 'cancelled' ? 'rejected' : 'pending'; return `<span class="badge ${c}">${esc(TX_STATUS_LBL[s] || s)}</span>`; };
+  function reportCardHtml(r) { if (!r) return ''; const c = r.disposition === 'cleared' ? 'verified' : r.disposition === 'conditional' ? 'pending' : 'rejected';
+    return `<div class="card pad" style="margin-top:16px"><div class="spread"><h3 style="margin:0;font-size:16px">Counsel report <span class="tiny muted">v${r.version} · ${esc(fmtDate(r.issuedAt))}</span></h3><span class="badge ${c}">${esc(DISPO_LBL[r.disposition] || r.disposition)}</span></div>${r.scope ? `<div class="tiny muted" style="margin-top:6px"><b>Scope:</b> ${esc(r.scope)}</div>` : ''}${r.summary ? `<p class="small" style="margin:8px 0 0">${esc(r.summary)}</p>` : ''}${r.conditions ? `<div class="small" style="margin-top:8px"><b>Conditions:</b> ${esc(r.conditions)}</div>` : ''}</div>`; }
+  function queryThreadHtml(qs) { if (!qs || !qs.length) return `<div class="tiny muted">No queries yet. CoDev's counsel will post any questions here during review.</div>`;
+    return qs.map(q => `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div class="tiny muted spread"><span><b>${q.authorKind === 'counsel' ? 'CoDev Counsel' : 'Developer'}</b> · ${esc(fmtDate(q.createdAt))}</span>${q.status === 'resolved' ? '<span class="badge verified">resolved</span>' : ''}</div><div class="small" style="margin-top:3px;white-space:pre-wrap">${esc(q.body)}</div></div>`).join(''); }
+  async function postQuery(pid, kind) { const el = document.getElementById(kind === 'developer' ? 'devQuery' : 'clQuery'); const body = (el && el.value.trim()) || ''; if (!body) { toast('Enter a message'); return; }
+    try { await db.legalQueries.add(pid, body, kind); toast('Sent'); route(); } catch (e) { toast((e && e.message) || 'Could not send'); } }
   const app = document.getElementById('app');
   const $ = (s, r = document) => r.querySelector(s);
 
@@ -293,8 +304,9 @@
     account(u, mine) { return portalHead('Your account', u) + sec('', '', `<div class="grid g2" style="align-items:start">
       <div class="card pad"><h3 style="margin:0 0 10px;font-size:17px">Profile</h3><p class="small"><b>${esc(u.name)}</b><br><span class="muted">${esc(u.email)}</span><br><span class="badge role" style="margin-top:6px">${u.role}</span></p><button class="btn danger sm" style="margin-top:10px" onclick="CODEVAPP.logout()">Log out</button></div>
       <div><div class="spread"><h3 style="font-size:17px">Your listings</h3><a class="btn sm" href="#/list">+ List</a></div><div id="mySubs">${listCards(mine)}</div></div></div>`); },
-    docs(u, p, docs) {
+    docs(u, p, st) {
       if (!p) return sec('Not found', '', empty('Listing not found.'));
+      const docs = (st && st.docs) || [], queries = (st && st.queries) || [], report = (st && st.report) || null;
       const isOwner = u && p.submittedBy && u.email && String(p.submittedBy).toLowerCase() === String(u.email).toLowerCase();
       const back = u && u.role === 'developer' ? '#/developer' : '#/account';
       if (!isOwner) return sec('', '', `<a class="small muted" href="${back}">← Back</a>${empty('You can only manage documents for your own listings.')}`);
@@ -303,7 +315,11 @@
         <h1 style="font-size:26px;margin:8px 0 2px">${esc(p.title)} — assurance documents</h1>
         <div class="muted" style="margin-bottom:2px">${p.ref ? 'Ref ' + esc(p.ref) + ' · ' : ''}Submit each required document for CoDev legal review &amp; due diligence.</div>
         <div class="tiny muted" style="margin-bottom:14px">Buyers see only the verification <b>status</b> of each document — never your files. Files are visible only to you and CoDev's legal/verification team.</div>
-        <div id="docList" class="grid" style="gap:10px">${rows.map(r => docRowDev(p.id, r)).join('')}</div>`);
+        <div id="docList" class="grid" style="gap:10px">${rows.map(r => docRowDev(p.id, r)).join('')}</div>
+        ${reportCardHtml(report)}
+        <h3 style="font-size:17px;margin:22px 0 8px">Legal review — queries</h3>
+        <div class="card pad">${queryThreadHtml(queries)}
+          <div class="row" style="gap:8px;margin-top:10px;align-items:flex-start"><textarea id="devQuery" rows="2" placeholder="Reply to CoDev's counsel…" style="flex:1"></textarea><button class="btn primary sm" onclick="CODEVAPP.postQuery('${p.id}','developer')">Send</button></div></div>`);
     },
     dealRoom(u, p, st) {
       if (!p) return sec('Not found', '', empty('Development not found.'));
@@ -324,8 +340,13 @@
       }
       const docs = st.docs || [];
       const rows = docs.length ? docs.map(d => `<div class="card pad spread"><div><b>${esc(d.label)}</b><div class="tiny muted">${d.fileName ? esc(d.fileName) : ''}${d.reviewedAt ? ' · verified ' + esc(fmtDate(d.reviewedAt)) : ''}</div></div><div class="row" style="gap:8px">${d.fileData ? `<a class="btn ghost sm" href="${d.fileData}" target="_blank" rel="noopener" onclick="CODEVAPP.logDeal('${p.id}','${esc(d.key)}','viewed')">View</a><a class="btn ghost sm" href="${d.fileData}" download="${esc(d.fileName || d.key)}" onclick="CODEVAPP.logDeal('${p.id}','${esc(d.key)}','downloaded')">Download</a>` : '<span class="tiny muted">No file</span>'}</div></div>`).join('') : empty('No cleared documents are available yet. Documents appear here as CoDev legal review clears them.');
+      const txs = st.txs || [];
+      const txHtml = txs.length ? txs.map(t => buyerTxCard(p.id, t)).join('') : '';
       return sec('', '', head + `<div class="card pad" style="background:#fff8e6;border-color:#f0e2b8;margin-bottom:12px"><b>🔒 Confidential.</b> <span class="small muted">Access granted ${acc.acknowledgedAt ? esc(fmtDate(acc.acknowledgedAt)) : ''}. Your views and downloads are logged. Please do not share these documents.</span></div>
-        <div class="grid" style="gap:10px">${rows}</div>`);
+        ${reportCardHtml(st.report)}
+        <h3 style="font-size:17px;margin:18px 0 8px">Due-diligence documents</h3>
+        <div class="grid" style="gap:10px">${rows}</div>
+        ${txHtml ? `<h3 style="font-size:17px;margin:22px 0 8px">Your transaction</h3><div class="grid" style="gap:10px">${txHtml}</div>` : ''}`);
     },
   };
   function listCards(mine) { if (!mine || !mine.length) return `<div class="card pad small muted">No submissions yet. <a href="#/list">List a property →</a></div>`;
@@ -341,6 +362,23 @@
   async function enterDealRoom(pid) { const ck = document.getElementById('ndaAck'); if (!ck || !ck.checked) { toast('Please acknowledge the confidentiality terms'); return; }
     try { await db.dealroom.acknowledge(pid, 'v1'); toast('Welcome to the Deal Room'); route(); } catch (e) { toast((e && e.message) || 'Could not open the Deal Room'); } }
   function logDeal(pid, key, event) { try { db.dealroom.log(pid, event, key); } catch (e) {} }
+  function buyerTxCard(pid, t) { const issued = (t.documents || []).filter(d => d.fileData);
+    return `<div class="card pad"><div class="spread"><div><b>${esc(TX_TYPE_LBL[t.txType] || t.txType)}</b>${t.amount ? ` · <span class="serif" style="color:var(--bronze)">${fmtN(t.amount)}</span>` : ''}</div>${txStatusBadge(t.status)}</div>
+      ${issued.length ? `<div class="tiny muted" style="margin-top:8px">Documents from CoDev:</div>${issued.map(d => `<div class="spread" style="padding:4px 0"><span class="small">${esc(d.title || d.docType || 'Document')}</span><a class="btn ghost sm" href="${d.fileData}" download="${esc(d.fileName || 'document')}">Download</a></div>`).join('')}` : ''}
+      ${t.completedAt ? `<div class="small" style="margin-top:8px;color:var(--green)"><b>Completed</b> ${esc(fmtDate(t.completedAt))}${t.completionRef ? ' · Ref ' + esc(t.completionRef) : ''}</div>` : `
+      <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">
+        <label class="btn ghost sm" style="cursor:pointer">📤 Upload signed document<input type="file" accept="application/pdf,image/*" style="display:none" onchange="CODEVAPP.txUpload('${t.id}','${pid}','signed',this)"></label>
+        <label class="btn ghost sm" style="cursor:pointer">💳 Upload funding evidence<input type="file" accept="application/pdf,image/*" style="display:none" onchange="CODEVAPP.txUpload('${t.id}','${pid}','funding',this)"></label>
+      </div>${t.fundingEvidence ? '<div class="tiny muted" style="margin-top:6px">✓ Funding evidence uploaded</div>' : ''}`}
+    </div>`; }
+  async function txUpload(txId, pid, kind, input) { const f = input.files && input.files[0]; input.value = ''; if (!f) return; if (f.size > 6 * 1024 * 1024) { toast('File too large — max 6MB'); return; }
+    try { const dataUrl = await fileToDataURL(f);
+      if (kind === 'signed') { const my = await db.transactions.listMineForProperty(pid); const t = my.find(x => x.id === txId) || { documents: [] };
+        const documents = (t.documents || []).concat([{ docType: 'signed', title: 'Signed by buyer', fileData: dataUrl, fileName: f.name, status: 'buyer_signed', issuedAt: new Date().toISOString() }]);
+        await db.transactions.update(txId, { documents, status: 'buyer_signed' }); }
+      else { await db.transactions.update(txId, { fundingEvidence: dataUrl, fundingNote: 'Uploaded by buyer' }); }
+      toast('Uploaded'); route();
+    } catch (e) { toast((e && e.message) || 'Upload failed'); } }
   async function submitDoc(pid, key, input) { const f = input.files && input.files[0]; input.value = ''; if (!f) return;
     if (f.size > 6 * 1024 * 1024) { toast('File too large — max 6MB'); return; }
     const label = ((CFG.REQUIRED_DOCS || []).find(t => t.key === key) || {}).label || key;
@@ -578,11 +616,15 @@
       if (path === '' || path === undefined) { const opps = await db.properties.listPublic(); let devs = 0, inv = 0; try { const accs = CFG.configured ? await db.profiles.listAll() : []; devs = accs.filter(a => a.role === 'developer').length; inv = accs.filter(a => a.role === 'investor').length; } catch {} app.innerHTML = V.home(opps, { opps: opps.length, devs: devs || '—', investors: inv || '—' }); }
       else if (path === 'opportunities') app.innerHTML = V.opportunities(await db.properties.listPublic());
       else if (path === 'opp') { const p = await db.properties.byId(arg); const dstat = p ? await db.documents.statusForProperty(arg) : []; app.innerHTML = V.opp(p, dstat); }
-      else if (path === 'docs') { const p = await db.properties.byId(arg); const docs = p ? await db.documents.listForProperty(arg) : []; app.innerHTML = V.docs(u, p, docs); }
-      else if (path === 'dealroom') { const p = await db.properties.byId(arg); let verified = false, access = null, docs = [];
+      else if (path === 'docs') { const p = await db.properties.byId(arg); let docs = [], queries = [], report = null;
+        if (p) { docs = await db.documents.listForProperty(arg).catch(() => []); queries = await db.legalQueries.list(arg).catch(() => []); report = await db.legalReports.latest(arg).catch(() => null); }
+        app.innerHTML = V.docs(u, p, { docs, queries, report }); }
+      else if (path === 'dealroom') { const p = await db.properties.byId(arg); let verified = false, access = null, docs = [], report = null, txs = [];
         if (p) { try { verified = await db.dealroom.isVerifiedBuyer(p.id); } catch {} try { access = await db.dealroom.myAccess(p.id); } catch {}
-          if (verified && access && access.status === 'active' && access.acknowledgedAt) { try { docs = await db.dealroom.clearedDocs(p.id); } catch {} try { await db.dealroom.log(p.id, 'opened', null); } catch {} } }
-        app.innerHTML = V.dealRoom(u, p, { verified, access, docs }); }
+          if (verified && access && access.status === 'active' && access.acknowledgedAt) {
+            try { docs = await db.dealroom.clearedDocs(p.id); } catch {} try { report = await db.legalReports.latest(p.id); } catch {}
+            try { txs = await db.transactions.listMineForProperty(p.id); } catch {} try { await db.dealroom.log(p.id, 'opened', null); } catch {} } }
+        app.innerHTML = V.dealRoom(u, p, { verified, access, docs, report, txs }); }
       else if (path === 'how') app.innerHTML = V.how();
       else if (path === 'list') app.innerHTML = V.list(u, await db.properties.listMine());
       else if (path === 'investor') app.innerHTML = V.investor(u, await db.properties.listPublic());
@@ -594,7 +636,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, enterDealRoom, logDeal, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, enterDealRoom, logDeal, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
   // Session timeout → clean logout + re-login prompt (fired by the data layer on an expired JWT).
   window.addEventListener('codev:session-expired', () => {
     renderAuthArea();
