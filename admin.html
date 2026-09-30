@@ -4,14 +4,14 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CoDev — Admin Console</title>
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=10" />
-<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=10" />
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=10" />
-<link rel="shortcut icon" href="favicon-32.png?v=10" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=11" />
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=11" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=11" />
+<link rel="shortcut icon" href="favicon-32.png?v=11" />
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=10" />
+<link rel="stylesheet" href="styles.css?v=11" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -50,7 +50,7 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=10"></script>
+<script src="data.js?v=11"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
@@ -208,6 +208,18 @@
   // ---------- LEGAL REVIEW (assurance & due diligence) ----------
   const DOC_LBL=(s)=>{ const f=(CFG.DOC_STATUSES||[]).find(x=>x[0]===s); return f?f[1]:'Awaiting submission'; };
   const docBadge=(s)=>{ const c=s==='cleared'?'verified':s==='under_review'?'pending':s==='rejected'?'rejected':'role'; return `<span class="badge ${c}">${esc(DOC_LBL(s))}</span>`; };
+  // Interactive per-document uploader shown inside the Edit · milestones modal.
+  function admDocRows(pid){ const list=(DOCS||[]).filter(d=>d.propertyId===pid);
+    return mergeDocsAdmin(list).map(r=>{ const d=r.doc; const st=d?d.status:'awaiting';
+      return `<div class="card pad" style="background:#fff"><div class="spread"><b class="small">${esc(r.label)}</b>${docBadge(st)}</div>
+        ${d&&d.fileName?`<div class="tiny muted" style="margin-top:4px">📎 ${esc(d.fileName)}${d.fileData?` · <a href="${d.fileData}" download="${esc(d.fileName)}">download</a>`:''}</div>`:''}
+        ${d&&d.note?`<div class="tiny" style="color:#b4232a;margin-top:4px">Reviewer note: ${esc(d.note)}</div>`:''}
+        <label class="photo-drop" style="margin-top:8px;min-height:60px"><input type="file" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.heic,.heif" onchange="ADMIN.uploadDoc('${pid}','${esc(r.key)}',this)"><span class="pd-inner" style="font-size:13px">📤 ${d&&d.fileName?'Replace document':'Upload document'} (PDF or image, max 6MB)</span></label></div>`; }).join(''); }
+  async function uploadDoc(pid,key,input){ const f=input.files&&input.files[0]; input.value=''; if(!f) return; if(f.size>6*1024*1024){toast('File too large — max 6MB');return;}
+    const label=((CFG.REQUIRED_DOCS||[]).find(t=>t.key===key)||{}).label||key; toast('Uploading…');
+    try{ const dataUrl=await fileToDataURLA(f); await db.documents.submit(pid,{key,label,fileData:dataUrl,fileName:f.name,fileType:f.type});
+      try{ DOCS=await db.documents.listAll(); }catch(e){} const box=document.getElementById('docUpRows'); if(box) box.innerHTML=admDocRows(pid); toast('Uploaded — status set to Under review'); }
+    catch(e){ toast((e&&e.message)||'Upload failed'); } }
   function mergeDocsAdmin(list){ const m={}; (list||[]).forEach(d=>{m[d.key]=d;}); const rows=(CFG.REQUIRED_DOCS||[]).map(t=>({key:t.key,label:t.label,doc:m[t.key]||null})); (list||[]).forEach(d=>{ if(!(CFG.REQUIRED_DOCS||[]).some(t=>t.key===d.key)) rows.push({key:d.key,label:d.label||d.key,doc:d}); }); return rows; }
   function docSummaryChip(list){ const req=(CFG.REQUIRED_DOCS||[]).length; const cl=(list||[]).filter(d=>d.status==='cleared').length; const ur=(list||[]).filter(d=>d.status==='under_review').length; const rj=(list||[]).filter(d=>d.status==='rejected').length; return `<span class="tiny muted">Docs ${cl}/${req} verified${ur?` · ${ur} under review`:''}${rj?` · ${rj} action`:''}</span>`; }
   async function loadLegal(){ $('#panel').innerHTML='<div class="card pad muted">Loading documents…</div>';
@@ -369,8 +381,8 @@
         <div class="field" style="flex:1"><label>Status</label><select name="status">${['pending','verified','rejected'].map(x=>`<option ${x===p.status?'selected':''}>${x}</option>`).join('')}</select></div></div>
       <div class="field"><label>Legal review status <span class="tiny muted">— shows a “CoDev Legal Verified” badge publicly only when Cleared / Conditionally cleared</span></label>
         <select name="legalStatus">${[['not_submitted','Not submitted'],['under_review','Under review'],['information_required','Information required'],['conditionally_cleared','Conditionally cleared'],['cleared','Cleared'],['material_issue','Material issue'],['rejected','Rejected / withdrawn']].map(o=>`<option value="${o[0]}" ${o[0]===(p.legalStatus||'not_submitted')?'selected':''}>${o[1]}</option>`).join('')}</select></div>
-      <div class="field"><label>Assurance documents <span class="tiny muted">— reviewed on the Legal review tab. You can publish this listing regardless of document status.</span></label>
-        <div class="card pad" style="background:var(--soft)">${mergeDocsAdmin((DOCS||[]).filter(d=>d.propertyId===p.id)).map(r=>{const st=r.doc?r.doc.status:'awaiting';return `<div class="spread" style="padding:3px 0"><span class="small">${esc(r.label)}</span>${docBadge(st)}</div>`;}).join('')}</div></div>
+      <div class="field"><label>Assurance documents <span class="tiny muted">— upload each required document here; it is reviewed on the Legal review tab. You can publish regardless of document status.</span></label>
+        <div id="docUpRows" class="grid" style="gap:8px">${admDocRows(p.id)}</div></div>
 
       <div class="spread" style="margin:6px 0 4px"><label style="margin:0">Milestones &amp; timeline</label><button type="button" class="btn sm" onclick="ADMIN.addMs()">+ Milestone</button></div>
       <div style="overflow-x:auto"><table><thead><tr><th>Milestone</th><th>%</th><th>Target date</th><th>Status</th><th></th></tr></thead><tbody id="msRows"></tbody></table></div>
@@ -554,7 +566,7 @@
   async function delAcc(id){ const a=ACCS.find(x=>x.id===id); if(confirm('Delete account "'+(a.name||a.email)+'"?')){ try{ await db.profiles.remove(id); toast('Account deleted'); await load(); }catch(err){toast(err.message);} } }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,copyRef,onTypeChange,addItem,delItem,itemSet,itemSize,reviewDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,admAccess,delProp,editProp,saveProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+  window.ADMIN={login,lock,tab,setStatus,copyRef,onTypeChange,addItem,delItem,itemSet,itemSize,reviewDoc,uploadDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,admAccess,delProp,editProp,saveProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
     addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps};
 
   // Session timeout in the admin console → message, then back to the sign-in gate.
