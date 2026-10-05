@@ -438,6 +438,7 @@
 
   // ---- location filter + search (dropdown grows automatically with the listings) ----
   let _opps = []; let _lb = [], _lbi = 0; let pendingBrochure = null;
+  let pendingDocs = {}; let devExtrasWork = [];
   function oppLocations(list) { const s = new Set(); (list || []).forEach(p => { const l = (p.location || '').trim(); if (l) s.add(l); }); return Array.from(s).sort((a, b) => a.localeCompare(b)); }
   function oppGridHtml(list) { return `<div class="grid g3">${(list || []).map(oppCard).join('') || empty('No developments match your filter — try another location or search term.')}</div>`; }
   // Make on-image captions readable on ANY photo: sample the caption area's brightness and
@@ -615,36 +616,92 @@
   function lbClose() { const bg = document.getElementById('lbBg'); if (bg) bg.classList.remove('show'); document.removeEventListener('keydown', lbKey); }
   function lbKey(e) { if (e.key === 'Escape') lbClose(); else if (e.key === 'ArrowRight') lbNext(); else if (e.key === 'ArrowLeft') lbPrev(); }
 
-  // ---- developer profile & brochure (self-service) ----
+  // ---- "About developer" profile (self-service) ----
+  // One document slot (optional). cur = currently-saved data URL (if any).
+  function devDocField(label, slot, cur, hint) {
+    const has = !!(pendingDocs[slot] || cur);
+    return `<div class="field"><label>${label}${hint ? ` <span class="tiny muted">— ${hint}</span>` : ''}</label>
+      <label class="photo-drop"><input type="file" accept="application/pdf,image/*" onchange="CODEVAPP.addDevDoc(this,'${slot}')"><span class="pd-inner" id="dd_${slot}">${has ? '📄 File attached — tap to replace' : '📄 Tap to upload (PDF or image)'}</span></label>
+      <div id="ds_${slot}" class="tiny muted" style="margin-top:6px">${cur ? `<a href="#" onclick="CODEVAPP.viewDevDoc('${slot}');return false">View current ↗</a>` : ''}</div></div>`;
+  }
+  // One repeatable optional "additional information" row.
+  function extraRowHtml(x, i) {
+    return `<div class="card pad" style="background:#fafafa;margin-bottom:10px" id="exrow_${i}">
+      <div class="spread" style="margin-bottom:6px"><strong class="tiny muted">Additional item ${i + 1}</strong><button type="button" class="btn ghost sm" onclick="CODEVAPP.delExtra(${i})">Remove</button></div>
+      <div class="field"><label>Label</label><input value="${esc(x.label || '')}" oninput="CODEVAPP.extraSet(${i},'label',this.value)" placeholder="e.g. Awards, Past projects, Bank reference"></div>
+      <div class="field"><label>Details</label><textarea rows="2" oninput="CODEVAPP.extraSet(${i},'note',this.value)" placeholder="Anything else you'd like us or investors to know…">${esc(x.note || '')}</textarea></div>
+      <div class="field" style="margin-bottom:0"><label>Attachment <span class="tiny muted">— optional, PDF or image</span></label>
+        <label class="photo-drop"><input type="file" accept="application/pdf,image/*" onchange="CODEVAPP.addExtraFile(this,${i})"><span class="pd-inner" id="exf_${i}">${x.file ? '📄 File attached — tap to replace' : '📄 Tap to attach a file (optional)'}</span></label></div>
+    </div>`;
+  }
   function devProfileCard(u) { const pr = (auth.profile && auth.profile()) || {};
+    pendingDocs = {}; devExtrasWork = Array.isArray(pr.devExtras) ? JSON.parse(JSON.stringify(pr.devExtras)) : [];
     const about = pr.about || '', website = pr.website || '', phone = pr.phone || '', brochure = pr.brochure || '';
+    const reg = pr.regNumber || '', yr = pr.yearEstablished || '', hq = pr.hqAddress || '';
     return `<div class="card pad" style="margin-bottom:18px">
-      <div class="spread" style="margin-bottom:4px"><h3 style="margin:0;font-size:18px">Developer profile &amp; brochure</h3><span class="badge role">${esc(u.role)}</span></div>
-      <p class="small muted" style="margin:0 0 14px">Shown to investors and our team. Add your company profile and upload a brochure (PDF or image).</p>
+      <div class="spread" style="margin-bottom:4px;flex-wrap:wrap;gap:6px"><h3 style="margin:0;font-size:18px">About developer</h3><span class="badge role">${esc(u.role)}</span></div>
+      <p class="small muted" style="margin:0 0 14px">Shown to investors and our team. Only your company name is required — everything else is optional; add as much or as little as you like.</p>
       <form onsubmit="return CODEVAPP.saveDevProfile(event)">
-        <div class="field"><label>Company / developer name</label><input name="name" value="${esc(u.name || '')}" required></div>
+        <div class="field"><label>Company / developer name <span style="color:#b91c1c">*</span></label><input name="name" value="${esc(u.name || '')}" required></div>
         <div class="field"><label>About / company profile</label><textarea name="about" rows="4" placeholder="Track record, focus areas, notable developments…">${esc(about)}</textarea></div>
-        <div class="row" style="gap:12px">
-          <div class="field" style="flex:1;min-width:160px"><label>Website</label><input name="website" value="${esc(website)}" placeholder="https://"></div>
-          <div class="field" style="flex:1;min-width:160px"><label>Phone</label><input name="phone" value="${esc(phone)}" placeholder="+234…"></div></div>
+        <div class="row" style="gap:12px;flex-wrap:wrap">
+          <div class="field" style="flex:1 1 200px;min-width:0"><label>Website</label><input name="website" value="${esc(website)}" placeholder="https://"></div>
+          <div class="field" style="flex:1 1 200px;min-width:0"><label>Phone</label><input name="phone" value="${esc(phone)}" placeholder="+234…"></div></div>
+        <div class="row" style="gap:12px;flex-wrap:wrap">
+          <div class="field" style="flex:1 1 180px;min-width:0"><label>CAC / RC registration number</label><input name="reg_number" value="${esc(reg)}" placeholder="RC123456"></div>
+          <div class="field" style="flex:1 1 120px;min-width:0"><label>Year established</label><input name="year_established" value="${esc(yr)}" placeholder="e.g. 2015"></div></div>
+        <div class="field"><label>Head office address</label><input name="hq_address" value="${esc(hq)}" placeholder="Street, city, state"></div>
+
+        <h4 style="margin:18px 0 8px;font-size:15px;color:#0f2233">Credentials &amp; documents <span class="tiny muted">— all optional, PDF or image up to 5MB each</span></h4>
+        ${devDocField('Company profile document', 'companyProfileDoc', pr.companyProfileDoc, 'company profile / portfolio')}
+        ${devDocField('CAC / incorporation documents', 'cacDoc', pr.cacDoc, 'certificate, status report')}
+        ${devDocField('References', 'referencesDoc', pr.referencesDoc, 'references / recommendation letters')}
         <div class="field"><label>Brochure <span class="tiny muted">— PDF or image, up to 5MB</span></label>
           <label class="photo-drop"><input type="file" accept="application/pdf,image/*" onchange="CODEVAPP.addBrochure(this)"><span class="pd-inner" id="brocLabel">${brochure ? '📄 Brochure attached — tap to replace' : '📄 Tap to upload a brochure (PDF or image)'}</span></label>
           <div id="brocState" class="tiny muted" style="margin-top:6px">${brochure ? `<a href="#" onclick="CODEVAPP.viewBrochure();return false">View current brochure ↗</a>` : ''}</div></div>
-        <button class="btn primary" id="dpBtn">Save profile</button>
+
+        <h4 style="margin:18px 0 8px;font-size:15px;color:#0f2233">Additional information <span class="tiny muted">— optional, add anything else about your company</span></h4>
+        <div id="exWrap">${devExtrasWork.map((x, i) => extraRowHtml(x, i)).join('')}</div>
+        <button type="button" class="btn ghost sm" onclick="CODEVAPP.addExtra()" style="margin-bottom:4px">+ Add more information</button>
+
+        <div style="margin-top:16px"><button class="btn primary" id="dpBtn">Save profile</button></div>
       </form></div>`; }
   function addBrochure(input) { const f = (input.files || [])[0]; input.value = ''; if (!f) return;
     if (f.size > 5 * 1024 * 1024) { toast('Brochure must be under 5MB'); return; }
     const r = new FileReader(); r.onload = () => { pendingBrochure = r.result; const l = document.getElementById('brocLabel'); if (l) l.textContent = '📄 ' + (f.name || 'Brochure') + ' ready — press Save to attach'; const st = document.getElementById('brocState'); if (st) st.textContent = 'New brochure selected: ' + (f.name || 'file'); };
     r.onerror = () => toast('Could not read that file'); r.readAsDataURL(f); }
+  // Generic optional-document handlers (company profile / CAC / references).
+  function addDevDoc(input, slot) { const f = (input.files || [])[0]; input.value = ''; if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { toast('File must be under 5MB'); return; }
+    const r = new FileReader(); r.onload = () => { pendingDocs[slot] = r.result; const l = document.getElementById('dd_' + slot); if (l) l.textContent = '📄 ' + (f.name || 'File') + ' ready — press Save to attach'; const st = document.getElementById('ds_' + slot); if (st) st.textContent = 'New file selected: ' + (f.name || 'file'); };
+    r.onerror = () => toast('Could not read that file'); r.readAsDataURL(f); }
+  function viewDevDoc(slot) { const pr = (auth.profile && auth.profile()) || {}; const b = pendingDocs[slot] || pr[slot]; if (!b) { toast('Nothing uploaded yet'); return; }
+    try { const url = URL.createObjectURL(dataURLtoBlob(b)); window.open(url, '_blank', 'noopener'); setTimeout(() => URL.revokeObjectURL(url), 60000); } catch (e) { toast('Could not open the file'); } }
+  function addExtra() { devExtrasWork.push({ label: '', note: '', file: '' }); const w = document.getElementById('exWrap'); if (w) w.insertAdjacentHTML('beforeend', extraRowHtml(devExtrasWork[devExtrasWork.length - 1], devExtrasWork.length - 1)); }
+  function delExtra(i) { devExtrasWork.splice(i, 1); const w = document.getElementById('exWrap'); if (w) w.innerHTML = devExtrasWork.map((x, ix) => extraRowHtml(x, ix)).join(''); }
+  function extraSet(i, field, val) { if (devExtrasWork[i]) devExtrasWork[i][field] = val; }
+  function addExtraFile(input, i) { const f = (input.files || [])[0]; input.value = ''; if (!f || !devExtrasWork[i]) return;
+    if (f.size > 5 * 1024 * 1024) { toast('File must be under 5MB'); return; }
+    const r = new FileReader(); r.onload = () => { devExtrasWork[i].file = r.result; const l = document.getElementById('exf_' + i); if (l) l.textContent = '📄 ' + (f.name || 'File') + ' attached'; };
+    r.onerror = () => toast('Could not read that file'); r.readAsDataURL(f); }
   function dataURLtoBlob(d) { const [meta, b64] = String(d).split(','); const mime = (meta.match(/data:([^;]+)/) || [])[1] || 'application/octet-stream'; const bin = atob(b64 || ''); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return new Blob([arr], { type: mime }); }
   function viewBrochure() { const pr = (auth.profile && auth.profile()) || {}; const b = pendingBrochure || pr.brochure; if (!b) { toast('No brochure uploaded yet'); return; }
     try { const url = URL.createObjectURL(dataURLtoBlob(b)); window.open(url, '_blank', 'noopener'); setTimeout(() => URL.revokeObjectURL(url), 60000); } catch (e) { toast('Could not open the brochure'); } }
   async function saveDevProfile(e) { e.preventDefault(); const f = e.target; const btn = $('#dpBtn'); btn.disabled = true; btn.textContent = 'Saving…';
-    const patch = { name: f.name.value.trim(), about: f.about.value.trim(), website: f.website.value.trim(), phone: f.phone.value.trim() };
+    const patch = { name: f.name.value.trim(), about: f.about.value.trim(), website: f.website.value.trim(), phone: f.phone.value.trim(),
+      reg_number: f.reg_number.value.trim(), year_established: f.year_established.value.trim(), hq_address: f.hq_address.value.trim(),
+      dev_extras: devExtrasWork.filter(x => (x.label && x.label.trim()) || (x.note && x.note.trim()) || x.file)
+        .map(x => ({ label: (x.label || '').trim(), note: (x.note || '').trim(), file: x.file || '' })) };
     if (pendingBrochure) patch.brochure = pendingBrochure;
-    try { await db.profiles.updateMine(patch); pendingBrochure = null; toast('Profile saved.'); renderAuthArea(); route(); }
+    if (pendingDocs.companyProfileDoc) patch.company_profile_doc = pendingDocs.companyProfileDoc;
+    if (pendingDocs.cacDoc) patch.cac_doc = pendingDocs.cacDoc;
+    if (pendingDocs.referencesDoc) patch.references_doc = pendingDocs.referencesDoc;
+    try { await db.profiles.updateMine(patch); pendingBrochure = null; pendingDocs = {};
+      if (CFG.devAboutUnavailable) toast('Profile saved. (Extra "About developer" fields need a one-time backend setup — run PROFILE-ABOUT.sql — to be stored.)');
+      else toast('Profile saved.');
+      renderAuthArea(); route(); }
     catch (err) { const m = (err && err.message) || '';
-      if (/about|website|phone|brochure|column|schema cache|\(40[0-4]\)/i.test(m)) toast('Developer profile needs a quick backend setup (run PROFILE-FIELDS.sql).');
+      if (/about|website|phone|brochure|column|schema cache|\(40[0-4]\)/i.test(m)) toast('Developer profile needs a quick backend setup (run PROFILE-ABOUT.sql).');
       else toast(m || 'Could not save profile');
       btn.disabled = false; btn.textContent = 'Save profile'; }
     return false; }
@@ -683,7 +740,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, stageDoc, enterDealRoom, logDeal, onTypeChange, addItemDev, delItemDev, itemSetDev, itemSizeDev, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, stageDoc, enterDealRoom, logDeal, onTypeChange, addItemDev, delItemDev, itemSetDev, itemSizeDev, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, addDevDoc, viewDevDoc, addExtra, delExtra, extraSet, addExtraFile, _afterAuth: null };
   // Session timeout → clean logout + re-login prompt (fired by the data layer on an expired JWT).
   window.addEventListener('codev:session-expired', () => {
     renderAuthArea();
