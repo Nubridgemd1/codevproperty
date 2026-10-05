@@ -143,7 +143,10 @@ window.CODEV = (function () {
   const toTx = (r) => ({ id: r.id, propertyId: r.property_id, userId: r.user_id, userEmail: r.user_email, userName: r.user_name, txType: r.tx_type, status: r.status, amount: r.amount, currency: r.currency, documents: Array.isArray(r.documents) ? r.documents : [], fundingEvidence: r.funding_evidence || '', fundingNote: r.funding_note || '', completionRef: r.completion_ref || '', completionNote: r.completion_note || '', completedAt: r.completed_at, createdAt: r.created_at });
   const toAcc = (r) => ({ id: r.id, name: r.name, email: r.email, role: r.role, status: r.status, createdAt: r.created_at,
     permissions: Array.isArray(r.permissions) ? r.permissions : [],
-    about: r.about || '', website: r.website || '', phone: r.phone || '', brochure: r.brochure || '' });
+    about: r.about || '', website: r.website || '', phone: r.phone || '', brochure: r.brochure || '',
+    regNumber: r.reg_number || '', yearEstablished: r.year_established || '', hqAddress: r.hq_address || '',
+    companyProfileDoc: r.company_profile_doc || '', cacDoc: r.cac_doc || '', referencesDoc: r.references_doc || '',
+    devExtras: Array.isArray(r.dev_extras) ? r.dev_extras : [] });
 
   // ================= SUPABASE MODE =================
   async function fetchProfile(id) { const r = await sb('/rest/v1/profiles?id=eq.' + id + '&select=*'); return r && r[0] ? toAcc(r[0]) : null; }
@@ -251,8 +254,21 @@ window.CODEV = (function () {
       // Signed-in user edits their OWN profile (developer profile & brochure). A DB guard trigger
       // stops non-admins from changing role/status/permissions, so only safe fields take effect.
       async updateMine(patch) { const s = getSession(); if (!s) throw new Error('Not signed in');
-        const row = {}; ['name', 'about', 'website', 'phone', 'brochure'].forEach(k => { if (k in patch) row[k] = patch[k]; });
-        const r = await sb('/rest/v1/profiles?id=eq.' + s.user.id, { method: 'PATCH', body: row, prefer: 'return=representation' });
+        const LEGACY = ['name', 'about', 'website', 'phone', 'brochure'];
+        const EXTRA = ['reg_number', 'year_established', 'hq_address', 'company_profile_doc', 'cac_doc', 'references_doc', 'dev_extras'];
+        const pick = (keys) => { const o = {}; keys.forEach(k => { if (k in patch) o[k] = patch[k]; }); return o; };
+        const patchTo = (body) => sb('/rest/v1/profiles?id=eq.' + s.user.id, { method: 'PATCH', body, prefer: 'return=representation' });
+        let r;
+        try { r = await patchTo(pick(LEGACY.concat(EXTRA))); CFG.devAboutUnavailable = false; }
+        catch (err) {
+          // No disruption: if the "About developer" columns aren't in the DB yet (PROFILE-ABOUT.sql
+          // not run), retry with only the long-standing fields so the profile still saves.
+          const m = (err && err.message) || '';
+          const hasExtra = Object.keys(pick(EXTRA)).length > 0;
+          if (hasExtra && /column|schema cache|reg_number|year_established|hq_address|company_profile_doc|cac_doc|references_doc|dev_extras|PGRST|\b40\d\b/i.test(m)) {
+            CFG.devAboutUnavailable = true; r = await patchTo(pick(LEGACY));
+          } else throw err;
+        }
         try { const p = await fetchProfile(s.user.id); if (p) { s.profile = p; setSession(s); } } catch {}
         return r; },
       async remove(id) { return sb('/rest/v1/profiles?id=eq.' + id, { method: 'DELETE' }); },
@@ -414,7 +430,7 @@ window.CODEV = (function () {
       async byId(id) { return rd(L.acc, []).find(a => a.id === id); },
       async add({ name, email, role, password }) { const list = rd(L.acc, []); if (list.some(a => a.email.toLowerCase() === email.toLowerCase())) throw new Error('Email exists'); const a = { id: uid(), name, email, role, status: 'active', pass: H(password || 'changeme'), createdAt: nowISO() }; list.push(a); wr(L.acc, list); return a; },
       async update(id, patch) { const list = rd(L.acc, []); const i = list.findIndex(a => a.id === id); if (i < 0) return; list[i] = { ...list[i], ...patch }; wr(L.acc, list); return list[i]; },
-      async updateMine(patch) { const s = rd(L.sess, null); if (!s) throw new Error('Not signed in'); const safe = {}; ['name', 'about', 'website', 'phone', 'brochure'].forEach(k => { if (k in patch) safe[k] = patch[k]; }); const list = rd(L.acc, []); const i = list.findIndex(a => a.id === s.id); if (i >= 0) { list[i] = { ...list[i], ...safe }; wr(L.acc, list); } if (safe.name) { s.name = safe.name; wr(L.sess, s); } return list[i]; },
+      async updateMine(patch) { const s = rd(L.sess, null); if (!s) throw new Error('Not signed in'); const safe = {}; ['name', 'about', 'website', 'phone', 'brochure', 'reg_number', 'year_established', 'hq_address', 'company_profile_doc', 'cac_doc', 'references_doc', 'dev_extras'].forEach(k => { if (k in patch) safe[k] = patch[k]; }); const list = rd(L.acc, []); const i = list.findIndex(a => a.id === s.id); if (i >= 0) { list[i] = { ...list[i], ...safe }; wr(L.acc, list); } if (safe.name) { s.name = safe.name; wr(L.sess, s); } return list[i]; },
       async remove(id) { wr(L.acc, rd(L.acc, []).filter(a => a.id !== id)); },
     },
     interests: {
