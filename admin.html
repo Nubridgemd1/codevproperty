@@ -458,7 +458,7 @@
       <td>${roleCell(a)}</td>
       <td><span class="badge ${badgeCls(a.status)}">${esc(a.status||'pending')}</span></td>
       <td class="tiny muted">${a.createdAt?new Date(a.createdAt).toLocaleDateString():''}</td>
-      <td style="white-space:nowrap;text-align:right">${acctActions(a)}
+      <td style="white-space:nowrap;text-align:right">${a.role==='developer'?`<button class="btn ghost sm" onclick="ADMIN.viewDev('${a.id}')">Profile</button> `:''}${acctActions(a)}
         ${(canA && a.role!=='admin')?`<button class="btn ghost sm" onclick="ADMIN.delAcc('${a.id}')">🗑</button>`:''}</td></tr>`).join('');
     return `<div class="spread" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px">Accounts</h3>${canA?'<button class="btn primary sm" onclick="ADMIN.addAcc()">+ Add account</button>':''}</div>
       <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
@@ -565,8 +565,28 @@
   async function setAcctStatus(id,s){ try{ await db.profiles.update(id,{status:s}); toast(s==='approved'?'Account approved — access granted':('Account '+s)); await load(); }catch(err){toast(err.message);} }
   async function delAcc(id){ const a=ACCS.find(x=>x.id===id); if(confirm('Delete account "'+(a.name||a.email)+'"?')){ try{ await db.profiles.remove(id); toast('Account deleted'); await load(); }catch(err){toast(err.message);} } }
 
+  // ---------- Developer "About" profile (verification view) ----------
+  function dvBlob(d){ const [meta,b64]=String(d).split(','); const mime=(meta.match(/data:([^;]+)/)||[])[1]||'application/octet-stream'; const bin=atob(b64||''); const arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i); return new Blob([arr],{type:mime}); }
+  function dvOpen(d){ if(!d){toast('Not provided');return;} try{ const url=URL.createObjectURL(dvBlob(d)); window.open(url,'_blank','noopener'); setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(e){toast('Could not open file');} }
+  function openDevFile(id,slot){ const a=ACCS.find(x=>x.id===id); dvOpen(a&&a[slot]); }
+  function openDevExtra(id,i){ const a=ACCS.find(x=>x.id===id); const x=a&&Array.isArray(a.devExtras)?a.devExtras[i]:null; dvOpen(x&&x.file); }
+  function viewDev(id){ const a=ACCS.find(x=>x.id===id)||{}; $('#mTitle').textContent='Developer profile — '+(a.name||a.email||'');
+    const row=(l,v)=>`<div class="spread" style="padding:7px 0;border-bottom:1px solid var(--line2);gap:12px"><span class="tiny muted">${l}</span><span class="tiny" style="font-weight:600;text-align:right">${v?esc(v):'—'}</span></div>`;
+    const docRow=(l,slot)=>{ const has=a&&a[slot]; return `<div class="spread" style="padding:8px 0;border-bottom:1px solid var(--line2);gap:12px"><span class="tiny" style="font-weight:600">${l}</span>${has?`<button class="btn ghost sm" onclick="ADMIN.openDevFile('${id}','${slot}')">View ↗</button>`:'<span class="tiny muted">— not provided</span>'}</div>`; };
+    const extras=Array.isArray(a.devExtras)?a.devExtras:[];
+    $('#mBody').innerHTML=`
+      ${row('Company / name',a.name)}${row('Email',a.email)}${row('Phone',a.phone)}${row('Website',a.website)}
+      ${row('CAC / RC number',a.regNumber)}${row('Year established',a.yearEstablished)}${row('Head office',a.hqAddress)}
+      <div style="margin:12px 0 4px;font-weight:700;color:#0f2233">About</div>
+      <p class="tiny" style="white-space:pre-wrap;margin:0 0 6px">${a.about?esc(a.about):'<span class="muted">—</span>'}</p>
+      <div style="margin:12px 0 4px;font-weight:700;color:#0f2233">Credentials &amp; documents</div>
+      ${docRow('Company profile document','companyProfileDoc')}${docRow('CAC / incorporation documents','cacDoc')}${docRow('References','referencesDoc')}${docRow('Brochure','brochure')}
+      <div style="margin:14px 0 4px;font-weight:700;color:#0f2233">Additional information</div>
+      ${extras.length?extras.map((x,i)=>`<div class="card pad" style="background:#fafafa;margin-bottom:8px"><div class="tiny" style="font-weight:700">${esc(x.label||('Item '+(i+1)))}</div>${x.note?`<div class="tiny" style="white-space:pre-wrap;margin-top:3px">${esc(x.note)}</div>`:''}${x.file?`<button class="btn ghost sm" style="margin-top:6px" onclick="ADMIN.openDevExtra('${id}',${i})">View attachment ↗</button>`:''}</div>`).join(''):'<span class="tiny muted">None added.</span>'}`;
+    $('#modal').classList.add('show'); }
+
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,copyRef,onTypeChange,addItem,delItem,itemSet,itemSize,reviewDoc,uploadDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,admAccess,delProp,editProp,saveProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+  window.ADMIN={login,lock,tab,setStatus,copyRef,onTypeChange,addItem,delItem,itemSet,itemSize,reviewDoc,uploadDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,admAccess,delProp,editProp,saveProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,viewDev,openDevFile,openDevExtra,closeModal,forgot,backToLogin,forgotSend,forgotReset,
     addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps};
 
   // Session timeout in the admin console → message, then back to the sign-in gate.
