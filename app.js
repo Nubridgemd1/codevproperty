@@ -340,6 +340,17 @@
         <div class="card pad">${queryThreadHtml(queries)}
           <div class="row" style="gap:8px;margin-top:10px;align-items:flex-start"><textarea id="devQuery" rows="2" placeholder="Reply to CoDev's counsel…" style="flex:1"></textarea><button class="btn primary sm" onclick="CODEVAPP.postQuery('${p.id}','developer')">Send</button></div></div>`);
     },
+    deals(u, p, txs) {
+      if (!p) return sec('Not found', '', empty('Listing not found.'));
+      const isOwner = u && p.submittedBy && u.email && String(p.submittedBy).toLowerCase() === String(u.email).toLowerCase();
+      const back = u && u.role === 'developer' ? '#/developer' : '#/account';
+      if (!isOwner) return sec('', '', `<a class="small muted" href="${back}">← Back</a>${empty('You can only manage deals for your own listings.')}`);
+      return sec('', '', `<a class="small muted" href="${back}">← Back to my listings</a>
+        <h1 style="font-size:26px;margin:8px 0 2px">${esc(p.title)} — deals &amp; payment calls</h1>
+        <div class="muted" style="margin-bottom:2px">${p.ref ? 'Ref ' + esc(p.ref) + ' · ' : ''}Track payment calls for each engaged buyer and the specific unit they are taking.</div>
+        <div class="tiny muted" style="margin-bottom:14px">Deals are created by CoDev once a buyer is verified for this listing. Record and update payment calls (label, amount, due date, status) per buyer + unit here — this never appears on the public listing.</div>
+        <div class="grid" style="gap:10px">${txs.length ? txs.map(t => devTxCard(t, p)).join('') : '<div class="card pad small muted">No deals yet. When CoDev verifies a buyer for this listing and creates a deal, it will appear here.</div>'}</div>`);
+    },
     dealRoom(u, p, st) {
       if (!p) return sec('Not found', '', empty('Development not found.'));
       const head = `<a class="small muted" href="#/opp/${p.id}">← Back to ${esc(p.title)}</a>
@@ -370,7 +381,7 @@
   };
   function listCards(mine) { if (!mine || !mine.length) return `<div class="card pad small muted">No submissions yet. <a href="#/list">List a property →</a></div>`;
     return `<div class="grid" style="gap:10px">${mine.map(p => `<div class="card pad"><div class="spread"><div class="row" style="gap:11px;align-items:center">${p.images && p.images[0] ? `<img src="${p.images[0]}" alt="" style="width:48px;height:48px;border-radius:9px;object-fit:cover;flex:none">` : ''}<div><b>${esc(p.title)}</b>${p.ref ? ` <span class="tiny" style="font-family:monospace;color:var(--ink2)">${esc(p.ref)}</span>` : ''}<div class="tiny muted">${esc(p.location)} · ${fmtN(p.priceFrom)} · funded ${funded(p)}%</div></div></div><span class="badge ${p.status}">${p.status}</span></div>
-      <div class="row" style="gap:8px;margin-top:10px"><a class="btn primary sm" href="#/docs/${p.id}">📤 Upload / manage documents</a></div></div>`).join('')}</div>`; }
+      <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><a class="btn primary sm" href="#/docs/${p.id}">📤 Upload / manage documents</a><a class="btn sm" href="#/deals/${p.id}">💳 Deals &amp; payment calls</a></div></div>`).join('')}</div>`; }
   function docRowDev(pid, r) { const d = r.doc || {}; const st = d.status || 'awaiting';
     return `<div class="card pad">
       <div class="spread"><b>${esc(r.label)}</b>${docStatusBadge(st)}</div>
@@ -378,6 +389,28 @@
       ${d.note ? `<div class="tiny" style="color:#b4232a;margin-top:5px">Reviewer note: ${esc(d.note)}</div>` : ''}
       <label class="photo-drop" style="margin-top:9px"><input type="file" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.heic,.heif" onchange="CODEVAPP.submitDoc('${pid}','${esc(r.key)}',this)"><span class="pd-inner">📤 ${d.fileName ? 'Replace document' : 'Upload document'} — PDF or image, max 6MB</span></label>
     </div>`; }
+  // ---- Developer: deals + payment calls (own listings only) ----
+  function devTxCard(t, p) { const unitOpts = (p && p.ref) ? unitIds(p.ref, p.units) : [];
+    const pays = t.payments || []; const tot = pays.reduce((n, x) => n + (Number(x.amount) || 0), 0); const paid = pays.filter(x => x.status === 'paid').reduce((n, x) => n + (Number(x.amount) || 0), 0);
+    return `<div class="card pad">
+      <div class="spread"><div><b>${esc(t.userName || t.userEmail || 'Buyer')}</b> · ${esc(t.txType)}${t.amount ? ' · ' + fmtN(t.amount) : ''}${t.unitRef ? ` · <span class="badge role" style="font-family:monospace">${esc(t.unitRef)}</span>` : ''}</div><span class="badge ${t.status === 'completed' ? 'verified' : 'pending'}">${esc(t.status)}</span></div>
+      ${(p && p.ref) ? `<div class="row" style="gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap"><span class="tiny muted">Unit / asset:</span><select id="dvunit_${t.id}" onchange="CODEVAPP.devTxUnit('${p.id}','${t.id}')" style="min-width:170px"><option value="">— Whole development —</option>${unitOpts.map(u => `<option value="${esc(u)}" ${u === t.unitRef ? 'selected' : ''}>${esc(u)}</option>`).join('')}</select></div>` : ''}
+      <div class="card pad" style="background:var(--soft);margin-top:10px">
+        <div class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Payment calls</div>
+        ${pays.length ? `<div style="overflow-x:auto"><table style="font-size:13px;width:100%"><tbody>${pays.map((pay, idx) => `<tr><td>${esc(pay.label || '')}</td><td class="tiny muted" style="white-space:nowrap">${esc(pay.dueDate || '')}</td><td style="text-align:right;white-space:nowrap">${(pay.amount != null && pay.amount !== '') ? fmtN(pay.amount) : '—'}</td><td style="width:110px"><select onchange="CODEVAPP.devTxPaySet('${p.id}','${t.id}',${idx},'status',this.value)">${['due', 'paid', 'overdue', 'waived'].map(s => `<option ${s === (pay.status || 'due') ? 'selected' : ''}>${s}</option>`).join('')}</select></td><td><button class="btn ghost sm" onclick="CODEVAPP.devTxDelPay('${p.id}','${t.id}',${idx})">✕</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="tiny muted">No payment calls yet.</div>'}
+        <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap"><input id="dvpl_${t.id}" placeholder="Label (e.g. Deposit, Milestone 1)" style="flex:2;min-width:150px"><input id="dvpa_${t.id}" type="number" placeholder="Amount (₦)" style="flex:1;min-width:110px"><input id="dvpd_${t.id}" type="date" style="flex:1;min-width:130px"><button class="btn primary sm" onclick="CODEVAPP.devTxAddPay('${p.id}','${t.id}')">+ Add call</button></div>
+        ${tot > 0 ? `<div class="tiny muted" style="margin-top:6px;text-align:right">Paid ${fmtN(paid)} of ${fmtN(tot)}</div>` : ''}
+      </div></div>`; }
+  async function devTxUnit(pid, id) { const ref = (document.getElementById('dvunit_' + id) || {}).value || ''; try { await db.transactions.update(id, { unitRef: ref }); toast(ref ? ('Linked to ' + ref) : 'Set to whole development'); route(); } catch (e) { toast((e && e.message) || 'Failed'); } }
+  async function devTxAddPay(pid, id) { const label = (document.getElementById('dvpl_' + id).value || '').trim(); const amount = document.getElementById('dvpa_' + id).value; const due = document.getElementById('dvpd_' + id).value; if (!label) { toast('Enter a label'); return; }
+    const t = (await db.transactions.listForProperty(pid)).find(x => x.id === id) || { payments: [] };
+    const payments = (t.payments || []).concat([{ label, amount: (amount === '' || amount == null) ? null : Number(amount), dueDate: due || '', status: 'due' }]);
+    try { await db.transactions.update(id, { payments }); toast('Payment call added'); route(); } catch (e) { toast((e && e.message) || 'Failed'); } }
+  async function devTxPaySet(pid, id, idx, k, v) { const t = (await db.transactions.listForProperty(pid)).find(x => x.id === id); if (!t) return; const payments = (t.payments || []).slice(); if (!payments[idx]) return;
+    payments[idx] = Object.assign({}, payments[idx], { [k]: (k === 'amount' ? ((v === '' || v == null) ? null : Number(v)) : v) });
+    try { await db.transactions.update(id, { payments }); route(); } catch (e) { toast((e && e.message) || 'Failed'); } }
+  async function devTxDelPay(pid, id, idx) { const t = (await db.transactions.listForProperty(pid)).find(x => x.id === id); if (!t) return; const payments = (t.payments || []).slice(); payments.splice(idx, 1);
+    try { await db.transactions.update(id, { payments }); toast('Payment call removed'); route(); } catch (e) { toast((e && e.message) || 'Failed'); } }
   async function enterDealRoom(pid) { const ck = document.getElementById('ndaAck'); if (!ck || !ck.checked) { toast('Please acknowledge the confidentiality terms'); return; }
     try { await db.dealroom.acknowledge(pid, 'v1'); toast('Welcome to the Deal Room'); route(); } catch (e) { toast((e && e.message) || 'Could not open the Deal Room'); } }
   function logDeal(pid, key, event) { try { db.dealroom.log(pid, event, key); } catch (e) {} }
@@ -711,7 +744,7 @@
   // ---- router (async) ----
   async function route() {
     const h = (location.hash || '#/').slice(2); const [path, arg] = h.split('/');
-    const gated = ['list', 'investor', 'developer', 'account', 'docs', 'dealroom'];
+    const gated = ['list', 'investor', 'developer', 'account', 'docs', 'dealroom', 'deals'];
     if (gated.includes(path) && !requireLogin(() => route())) { app.innerHTML = sec('Sign in required', 'Please sign in to continue.', ''); return; }
     if (gated.includes(path) && mfaGate()) { app.innerHTML = sec('Two-factor required', 'Complete two-factor authentication to continue.', ''); return; }
     // Admin-verification gate: a signed-in account holder cannot operate, list or view until approved.
@@ -736,13 +769,14 @@
       else if (path === 'investor') app.innerHTML = V.investor(u, await db.properties.listPublic());
       else if (path === 'developer') app.innerHTML = V.developer(u, await db.properties.listMine());
       else if (path === 'account') app.innerHTML = V.account(u, await db.properties.listMine());
+      else if (path === 'deals') { const p = arg ? await db.properties.byId(arg) : null; let txs = []; if (p) { try { txs = await db.transactions.listForProperty(p.id); } catch {} } app.innerHTML = V.deals(u, p, txs); }
       else { const opps = await db.properties.listPublic(); app.innerHTML = V.home(opps, { opps: opps.length, devs: '—', investors: '—' }); }
     } catch (err) { app.innerHTML = sec('Something went wrong', err.message || 'Please try again.', ''); }
     adaptCovers();
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, stageDoc, enterDealRoom, logDeal, onTypeChange, addItemDev, delItemDev, itemSetDev, itemSizeDev, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, addDevDoc, viewDevDoc, addExtra, delExtra, extraSet, addExtraFile, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, stageDoc, enterDealRoom, logDeal, onTypeChange, addItemDev, delItemDev, itemSetDev, itemSizeDev, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, addDevDoc, viewDevDoc, addExtra, delExtra, extraSet, addExtraFile, devTxUnit, devTxAddPay, devTxPaySet, devTxDelPay, _afterAuth: null };
   // Session timeout → clean logout + re-login prompt (fired by the data layer on an expired JWT).
   window.addEventListener('codev:session-expired', () => {
     renderAuthArea();
