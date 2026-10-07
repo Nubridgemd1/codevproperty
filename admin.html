@@ -4,14 +4,14 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CoDev — Admin Console</title>
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=14" />
-<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=14" />
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=14" />
-<link rel="shortcut icon" href="favicon-32.png?v=14" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=15" />
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=15" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=15" />
+<link rel="shortcut icon" href="favicon-32.png?v=15" />
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=14" />
+<link rel="stylesheet" href="styles.css?v=15" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -50,7 +50,7 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=14"></script>
+<script src="data.js?v=15"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
@@ -312,6 +312,7 @@
     return (list||[]).map(p=>`<tr>
       <td><b>${esc(p.title)}</b>${p.ref?` <span class="badge role" style="font-family:monospace">${esc(p.ref)}</span>`:''}<div class="tiny muted">${esc(p.location)} · funded ${fundedPct(p)}%</div><div>${docSummaryChip((DOCS||[]).filter(d=>d.propertyId===p.id))}</div></td>
       <td>${esc(p.developer||'')}<div class="tiny muted">${esc(p.submittedBy||'')} · <span class="badge role">${p.submittedByRole||'—'}</span></div></td>
+      <td>${p.assignedTo?`<span class="badge" style="background:#e6f5ec;color:#1f7a4d;border-color:#cfe6da">✓ ${esc(p.assignedTo)}</span>`:'<span class="tiny muted">—</span>'}</td>
       <td>${fmtN(p.priceFrom)}<div class="tiny muted">${esc(p.stage||'')}</div></td>
       <td><span class="badge ${p.status}">${p.status}</span></td>
       <td style="white-space:nowrap;text-align:right">${canL?`
@@ -319,7 +320,7 @@
         ${p.status!=='rejected'?`<button class="btn sm danger" onclick="ADMIN.setStatus('${p.id}','rejected')">Reject</button>`:''}
         <button class="btn sm navy" onclick="ADMIN.editProp('${p.id}')">Edit · milestones</button>
         <button class="btn ghost sm" onclick="ADMIN.delProp('${p.id}')">🗑</button>`:'<span class="tiny muted">View only</span>'}</td></tr>`).join('')
-      || `<tr><td colspan="5" class="center muted" style="padding:24px">No properties match your filter.</td></tr>`;
+      || `<tr><td colspan="6" class="center muted" style="padding:24px">No properties match your filter.</td></tr>`;
   }
   function filterProps(){
     const loc=(document.getElementById('pLoc')||{}).value||'';
@@ -337,7 +338,7 @@
       <div class="field" style="margin:0;flex:1;min-width:200px"><input id="pSearch" type="search" placeholder="Search title, developer, lister or status…" oninput="ADMIN.filterProps()" aria-label="Search listings"></div>
       ${can('manage_listings')?`<button class="btn primary sm" onclick="ADMIN.newProp()">+ New listing</button>`:''}
       <span id="pCount" class="small muted">${n} listing${n===1?'':'s'}</span></div>
-      <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Property</th><th>Lister</th><th>From / Stage</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+      <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Property</th><th>Lister</th><th>Assigned to</th><th>From / Stage</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
       <tbody id="propRows">${propRowsHtml(PROPS)}</tbody></table></div></div>
       <p class="tiny muted" style="margin-top:10px">Verify to publish. “Edit · milestones” lets you modify details, the milestone timeline and payments. Listings come from developers and property owners alike.</p>`;
   }
