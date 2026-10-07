@@ -141,7 +141,7 @@ window.CODEV = (function () {
   const toEvent = (r) => ({ id: r.id, propertyId: r.property_id, userId: r.user_id, userEmail: r.user_email, event: r.event, docKey: r.doc_key || '', createdAt: r.created_at || null });
   const toQuery = (r) => ({ id: r.id, propertyId: r.property_id, authorId: r.author_id, authorEmail: r.author_email, authorKind: r.author_kind, body: r.body, status: r.status, createdAt: r.created_at });
   const toReport = (r) => ({ id: r.id, propertyId: r.property_id, version: r.version, scope: r.scope || '', disposition: r.disposition, summary: r.summary || '', conditions: r.conditions || '', issuedAt: r.issued_at, issuedBy: r.issued_by });
-  const toTx = (r) => ({ id: r.id, propertyId: r.property_id, userId: r.user_id, userEmail: r.user_email, userName: r.user_name, txType: r.tx_type, status: r.status, amount: r.amount, currency: r.currency, documents: Array.isArray(r.documents) ? r.documents : [], fundingEvidence: r.funding_evidence || '', fundingNote: r.funding_note || '', completionRef: r.completion_ref || '', completionNote: r.completion_note || '', completedAt: r.completed_at, createdAt: r.created_at });
+  const toTx = (r) => ({ id: r.id, propertyId: r.property_id, userId: r.user_id, userEmail: r.user_email, userName: r.user_name, txType: r.tx_type, status: r.status, amount: r.amount, currency: r.currency, documents: Array.isArray(r.documents) ? r.documents : [], fundingEvidence: r.funding_evidence || '', fundingNote: r.funding_note || '', completionRef: r.completion_ref || '', completionNote: r.completion_note || '', completedAt: r.completed_at, createdAt: r.created_at, unitRef: r.unit_ref || '', payments: Array.isArray(r.payments) ? r.payments : [] });
   const toAcc = (r) => ({ id: r.id, name: r.name, email: r.email, role: r.role, status: r.status, createdAt: r.created_at,
     permissions: Array.isArray(r.permissions) ? r.permissions : [],
     about: r.about || '', website: r.website || '', phone: r.phone || '', brochure: r.brochure || '',
@@ -390,10 +390,12 @@ window.CODEV = (function () {
       async listMine() { const s = getSession(); if (!s) return []; return (await sb('/rest/v1/transactions?user_id=eq.' + s.user.id + '&order=created_at.desc&select=*')).map(toTx); },
       async listMineForProperty(pid) { const s = getSession(); if (!s) return []; return (await sb('/rest/v1/transactions?property_id=eq.' + pid + '&user_id=eq.' + s.user.id + '&order=created_at.desc&select=*')).map(toTx); },
       async create(tx) { const s = getSession(); const row = { property_id: tx.propertyId, user_id: tx.userId, user_email: tx.userEmail || null, user_name: tx.userName || null,
-          tx_type: tx.txType, status: 'initiated', amount: (tx.amount === '' || tx.amount == null) ? null : Number(tx.amount), currency: tx.currency || 'NGN', created_by: s.user.id };
+          tx_type: tx.txType, status: 'initiated', amount: (tx.amount === '' || tx.amount == null) ? null : Number(tx.amount), currency: tx.currency || 'NGN', unit_ref: tx.unitRef || null, created_by: s.user.id };
         return (await sb('/rest/v1/transactions', { method: 'POST', body: row, prefer: 'return=representation' })).map(toTx)[0]; },
       async update(id, patch) { const row = { updated_at: nowISO() };
         if ('status' in patch) row.status = patch.status;
+        if ('unitRef' in patch) row.unit_ref = patch.unitRef || null;
+        if ('payments' in patch) row.payments = Array.isArray(patch.payments) ? patch.payments : [];
         if ('amount' in patch) row.amount = (patch.amount === '' || patch.amount == null) ? null : Number(patch.amount);
         if ('currency' in patch) row.currency = patch.currency;
         if ('documents' in patch) row.documents = patch.documents;
