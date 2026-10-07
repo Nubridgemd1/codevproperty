@@ -556,9 +556,10 @@ window.CODEV = (function () {
   // Label for one property item (residential → bedrooms; land → size; else the type).
   const itemLabel = (it) => {
     const t = (it && it.type) || '';
-    if (isResidential(t) && it.bedrooms) return it.bedrooms.replace(/Bedrooms/i, 'Bedroom') + ' ' + t;
-    if (isLand(t)) { const parts = []; if (it.landSqm) parts.push(it.landSqm + ' sqm'); if (it.landSqft) parts.push(it.landSqft + ' sqft'); return t + (parts.length ? ' — ' + parts.join(' / ') : ''); }
-    return t;
+    const u = Number(it && it.units); const us = (u > 0) ? ' · ' + u + ' unit' + (u === 1 ? '' : 's') : '';
+    if (isResidential(t) && it.bedrooms) return it.bedrooms.replace(/Bedrooms/i, 'Bedroom') + ' ' + t + us;
+    if (isLand(t)) { const parts = []; if (it.landSqm) parts.push(it.landSqm + ' sqm'); if (it.landSqft) parts.push(it.landSqft + ' sqft'); return t + (parts.length ? ' — ' + parts.join(' / ') : '') + us; }
+    return t + us;
   };
   // Min/max price across a listing's property items (numbers only).
   const priceRange = (items) => {
