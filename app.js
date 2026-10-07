@@ -258,16 +258,16 @@
       ${modelSection()}${trustSection()}${ctaSection()}`; },
     opportunities(opps) { _opps = opps; return sec('All opportunities', 'Every listing here has been verified by our admin team. Filter by location or search as new developments are listed.', `${oppFilterBar(opps)}<div id="oppGrid">${oppGridHtml(opps)}</div>`); },
     opp(p, dstat) { if (!p) return sec('Not available', '', empty('This development is not available.'));
-      const ms = p.milestones || []; const pays = p.payments || []; _lb = p.images || [];
+      const ms = p.milestones || []; _lb = p.images || [];
       return `<section class="wrap" style="padding:36px 22px"><a class="small muted" href="#/opportunities">← All opportunities</a>
         <div class="grid g2" style="margin-top:14px;align-items:start">
           <div class="card" style="overflow:hidden"><div class="ph${p.images && p.images.length ? ' clickable' : ''}" style="height:240px;${coverBg(p)}position:relative"${p.images && p.images.length ? ` onclick="CODEVAPP.openLightbox(0)" title="Click to enlarge"` : ''}>${p.images && p.images.length ? '<span class="lb-hint">🔍 Click to enlarge</span>' : ''}</div>
             ${p.images && p.images.length > 1 ? `<div class="photo-grid" style="padding:10px 10px 0">${p.images.map((d, i) => `<div class="ph-thumb clickable" onclick="CODEVAPP.openLightbox(${i})" title="Click to enlarge"><img src="${d}" alt="Development photo ${i + 1}"></div>`).join('')}</div>` : ''}
-            <div style="padding:18px"><h3 style="margin:0 0 10px;font-size:17px">Milestone schedule &amp; timeline</h3>
-              ${fundingBar(p)}
-              <table style="margin-top:10px;font-size:13px"><thead><tr><th>Milestone</th><th>%</th><th>Target</th><th>Status</th></tr></thead><tbody>
-              ${ms.map(m => `<tr><td>${esc(m.name)}</td><td>${m.pct}%</td><td class="tiny muted">${esc(m.targetDate || '—')}</td><td><span class="badge ${m.status === 'certified' ? 'verified' : m.status === 'in-progress' ? 'pending' : 'role'}">${esc((CFG.MILESTONE_STATUS_LABELS && CFG.MILESTONE_STATUS_LABELS[m.status]) || m.status)}</span></td></tr>`).join('') || `<tr><td colspan="4" class="muted tiny">No milestones set.</td></tr>`}
-              </tbody></table></div></div>
+            <div style="padding:18px"><h3 style="margin:0 0 10px;font-size:17px">Construction schedule &amp; timeline</h3>
+              <table style="margin-top:4px;font-size:13px"><thead><tr><th>Phase</th><th>%</th><th>Target</th></tr></thead><tbody>
+              ${ms.map(m => `<tr><td>${esc(m.name)}</td><td>${m.pct}%</td><td class="tiny muted">${esc(m.targetDate || '—')}</td></tr>`).join('') || `<tr><td colspan="3" class="muted tiny">No schedule set.</td></tr>`}
+              </tbody></table>
+              <p class="tiny muted" style="margin-top:8px">Planned construction phasing. Payment schedules are agreed per buyer when a reservation or sale is created.</p></div></div>
           <div><span class="badge verified">✓ Verified</span> ${legalBadgeHtml(p)}<h1 style="font-size:30px;margin:10px 0 4px">${esc(p.title)}</h1>
             ${p.ref ? `<div class="tiny" style="font-family:monospace;color:var(--ink2);margin:0 0 4px">Ref: <b style="color:var(--navy)">${esc(p.ref)}</b></div>` : ''}
             <div class="muted">${esc(p.developer)} · 📍 ${esc(p.location)}</div>
@@ -286,10 +286,6 @@
               <table style="font-size:13px;width:100%"><tbody>${mergeReqDocs(dstat || [], 'doc_key').map(r => { const st = (r.doc && r.doc.status) || 'awaiting'; return `<tr><td>${esc(r.label)}</td><td style="text-align:right;white-space:nowrap">${docStatusBadge(st)}</td></tr>`; }).join('')}</tbody></table>
               <div class="tiny muted" style="margin-top:8px">Key project documents are reviewed by CoDev's legal partner. Underlying documents can be requested during investor qualification.</div>
               ${(function(){ const u = me(); return (u && p.submittedBy && u.email && String(p.submittedBy).toLowerCase() === String(u.email).toLowerCase()) ? `<a class="btn primary sm" style="margin-top:10px" href="#/docs/${p.id}">📤 Upload / manage assurance documents</a>` : ''; })()}</div>
-            ${(p.ref && (p.units === 0 || p.units)) ? `<details class="card pad" style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;color:var(--navy)">Unit register — ${unitIds(p.ref, p.units).length} unit${unitIds(p.ref, p.units).length === 1 ? '' : 's'} <span class="tiny muted">· each tagged ${esc(p.ref)}</span></summary>
-              <div style="max-height:200px;overflow:auto;font-family:monospace;font-size:12px;line-height:1.9;margin-top:8px">${unitIds(p.ref, p.units).map(u => esc(u)).join('<br>')}</div></details>` : ''}
-            ${pays.length ? `<div class="card pad" style="margin-top:14px"><h3 style="margin:0 0 8px;font-size:15px">Payments &amp; capital calls</h3>
-              <table style="font-size:13px"><tbody>${pays.map(pay => `<tr><td>${esc(pay.label)}</td><td class="tiny muted">${esc(pay.dueDate || '')}</td><td style="text-align:right">${fmtN(pay.amount)}</td><td><span class="badge ${pay.status === 'paid' ? 'verified' : 'pending'}">${esc(pay.status)}</span></td></tr>`).join('')}</tbody></table></div>` : ''}
             <div class="row" style="gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn primary" onclick="CODEVAPP.express('${p.id}')">I'm Interested — start qualification</button><a class="btn" href="#/dealroom/${p.id}">🔐 Deal Room</a></div>
             <p class="tiny muted" style="margin-top:8px">Complete a short investor qualification. CoDev verifies applicants before granting Deal Room access to confidential project documents.</p></div></div></section>`; },
     how() { const steps = [['List', 'A developer or property owner submits a development or plot.'], ['Verify', 'Admin reviews and verifies the listing before it goes public.'], ['Co-develop', 'Investors browse verified opportunities and express interest.'], ['Govern', 'Milestone-based structure with timelines & payments; funds are released through licensed escrow partners against verified construction milestones.']];

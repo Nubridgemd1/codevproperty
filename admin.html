@@ -4,14 +4,14 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CoDev — Admin Console</title>
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=16" />
-<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=16" />
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=16" />
-<link rel="shortcut icon" href="favicon-32.png?v=16" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=17" />
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png?v=17" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=17" />
+<link rel="shortcut icon" href="favicon-32.png?v=17" />
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=16" />
+<link rel="stylesheet" href="styles.css?v=17" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -50,7 +50,7 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=16"></script>
+<script src="data.js?v=17"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
@@ -289,13 +289,24 @@
           <select id="txType" style="flex:1;min-width:140px">${Object.entries(TXT).map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('')}</select>
           <input id="txAmount" type="number" placeholder="Amount (₦)" style="flex:1;min-width:120px"><button class="btn primary sm" onclick="ADMIN.createTx('${pid}')">Create</button></div>
         ${quals.length?'':'<div class="tiny muted" style="margin-top:6px">No CoDev-verified buyers for this listing yet — verify a buyer in the Investors pipeline first.</div>'}</div>
-        <div class="grid" style="gap:10px">${txs.length?txs.map(t=>adminTxCard(t)).join(''):'<div class="tiny muted">No transactions yet.</div>'}</div>`;
+        <div class="grid" style="gap:10px">${txs.length?txs.map(t=>adminTxCard(t,p)).join(''):'<div class="tiny muted">No transactions yet.</div>'}</div>`;
     }catch(e){ $('#mBody').innerHTML='<div class="muted">Could not load transactions. Run TRANSACTIONS.sql if you have not.</div>'; } }
-  function adminTxCard(t){ const st=t.status;
-    return `<div class="card pad"><div class="spread"><div><b>${esc(t.userName||t.userEmail||'Buyer')}</b> · ${esc(TXT[t.txType]||t.txType)}${t.amount?` · ₦${Number(t.amount).toLocaleString()}`:''}</div>${txBadge(st)}</div>
+  function adminTxCard(t,p){ const st=t.status; const unitOpts=(p&&p.ref)?window.CODEV.unitIds(p.ref,p.units):[];
+    return `<div class="card pad"><div class="spread"><div><b>${esc(t.userName||t.userEmail||'Buyer')}</b> · ${esc(TXT[t.txType]||t.txType)}${t.amount?` · ₦${Number(t.amount).toLocaleString()}`:''}${t.unitRef?` · <span class="badge role" style="font-family:monospace">${esc(t.unitRef)}</span>`:''}</div>${txBadge(st)}</div>
       <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center"><select id="txs_${t.id}">${Object.keys(TXS).map(s=>`<option value="${s}" ${s===st?'selected':''}>${esc(TXS[s])}</option>`).join('')}</select><button class="btn ghost sm" onclick="ADMIN.setTxStatus('${t.id}','${t.propertyId}')">Update status</button><label class="btn ghost sm" style="cursor:pointer">📎 Attach document<input type="file" accept="application/pdf,image/*" style="display:none" onchange="ADMIN.txAttach('${t.id}','${t.propertyId}',this)"></label></div>
+      ${(p&&p.ref)?`<div class="row" style="gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap"><span class="tiny muted">Unit / asset:</span><select id="txunit_${t.id}" onchange="ADMIN.txSetUnit('${t.id}','${t.propertyId}')" style="min-width:170px"><option value="">— Whole development —</option>${unitOpts.map(u=>`<option value="${esc(u)}" ${u===t.unitRef?'selected':''}>${esc(u)}</option>`).join('')}</select></div>`:''}
       ${(t.documents||[]).length?`<div class="tiny muted" style="margin-top:8px">Documents:</div>${(t.documents||[]).map(d=>`<div class="spread" style="padding:3px 0"><span class="small">${esc(d.title||d.docType)}${d.docType==='signed'?' <span class="badge role">buyer-signed</span>':''}</span>${d.fileData?`<a class="btn ghost sm" href="${d.fileData}" download="${esc(d.fileName||'document')}">Download</a>`:''}</div>`).join('')}`:''}
       ${t.fundingEvidence?`<div class="small" style="margin-top:6px">💳 Funding evidence: <a href="${t.fundingEvidence}" download="funding-evidence">download</a>${t.fundingNote?' · '+esc(t.fundingNote):''}</div>`:''}
+      <div class="card pad" style="background:var(--soft);margin-top:10px">
+        <div class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Payment calls <span style="text-transform:none;font-weight:400">· tracked for this buyer${t.unitRef?' · '+esc(t.unitRef):''}</span></div>
+        ${(t.payments||[]).length?`<div style="overflow-x:auto"><table style="font-size:13px;width:100%"><tbody>${(t.payments||[]).map((pay,idx)=>`<tr>
+          <td>${esc(pay.label||'')}</td><td class="tiny muted" style="white-space:nowrap">${esc(pay.dueDate||'')}</td>
+          <td style="text-align:right;white-space:nowrap">${(pay.amount!=null&&pay.amount!=='')?'₦'+Number(pay.amount).toLocaleString():'—'}</td>
+          <td style="width:110px"><select onchange="ADMIN.txPaySet('${t.id}','${t.propertyId}',${idx},'status',this.value)">${['due','paid','overdue','waived'].map(s=>`<option ${s===(pay.status||'due')?'selected':''}>${s}</option>`).join('')}</select></td>
+          <td><button class="btn ghost sm" onclick="ADMIN.txDelPay('${t.id}','${t.propertyId}',${idx})">✕</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="tiny muted">No payment calls yet.</div>'}
+        <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap"><input id="txpl_${t.id}" placeholder="Label (e.g. Deposit, Milestone 1)" style="flex:2;min-width:150px"><input id="txpa_${t.id}" type="number" placeholder="Amount (₦)" style="flex:1;min-width:110px"><input id="txpd_${t.id}" type="date" style="flex:1;min-width:130px"><button class="btn primary sm" onclick="ADMIN.txAddPay('${t.id}','${t.propertyId}')">+ Add call</button></div>
+        ${(function(){ const pays=t.payments||[]; const tot=pays.reduce((n,x)=>n+(Number(x.amount)||0),0); const paid=pays.filter(x=>x.status==='paid').reduce((n,x)=>n+(Number(x.amount)||0),0); return tot>0?`<div class="tiny muted" style="margin-top:6px;text-align:right">Paid ₦${paid.toLocaleString()} of ₦${tot.toLocaleString()}</div>`:''; })()}
+      </div>
       ${t.completedAt?`<div class="small" style="margin-top:8px;color:var(--green)"><b>Completed &amp; archived</b> ${esc(new Date(t.completedAt).toLocaleDateString())}${t.completionRef?' · Ref '+esc(t.completionRef):''}${t.completionNote?'<div class="tiny muted">'+esc(t.completionNote)+'</div>':''}</div>`:`
       <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><input id="txcr_${t.id}" placeholder="Completion ref" style="flex:1;min-width:120px"><input id="txcn_${t.id}" placeholder="Completion note" style="flex:2;min-width:150px"><button class="btn sm navy" onclick="ADMIN.completeTx('${t.id}','${t.propertyId}')">Mark completed &amp; archive</button></div>`}
     </div>`; }
@@ -305,6 +316,17 @@
   async function txAttach(id,pid,input){ const f=input.files&&input.files[0]; input.value=''; if(!f)return; if(f.size>6*1024*1024){toast('File too large — max 6MB');return;}
     try{ const dataUrl=await fileToDataURLA(f); const cur=(await db.transactions.listForProperty(pid)).find(x=>x.id===id)||{documents:[]}; const documents=(cur.documents||[]).concat([{docType:'issued',title:f.name,fileData:dataUrl,fileName:f.name,status:'issued',issuedAt:new Date().toISOString()}]); await db.transactions.update(id,{documents,status:cur.status==='initiated'?'documents_issued':cur.status}); toast('Attached'); openTx(pid); }catch(e){toast(e.message||'Failed');} }
   async function completeTx(id,pid){ const ref=$('#txcr_'+id).value.trim(); const note=$('#txcn_'+id).value.trim(); try{ await db.transactions.update(id,{status:'completed',completionRef:ref,completionNote:note,completedAt:window.CODEV.now()}); toast('Transaction completed & archived'); openTx(pid); }catch(e){toast(e.message||'Failed');} }
+  // ---- Per-deal unit/asset + payment calls (buyer + unit linked; never on the listing) ----
+  async function txSetUnit(id,pid){ const ref=(document.getElementById('txunit_'+id)||{}).value||''; try{ await db.transactions.update(id,{unitRef:ref}); toast(ref?('Linked to '+ref):'Set to whole development'); openTx(pid); }catch(e){toast(e.message||'Failed');} }
+  async function txAddPay(id,pid){ const label=($('#txpl_'+id).value||'').trim(); const amount=$('#txpa_'+id).value; const due=$('#txpd_'+id).value; if(!label){toast('Enter a label');return;}
+    const t=(await db.transactions.listForProperty(pid)).find(x=>x.id===id)||{payments:[]};
+    const payments=(t.payments||[]).concat([{label,amount:(amount===''||amount==null)?null:Number(amount),dueDate:due||'',status:'due'}]);
+    try{ await db.transactions.update(id,{payments}); toast('Payment call added'); openTx(pid); }catch(e){toast(e.message||'Failed');} }
+  async function txPaySet(id,pid,idx,k,v){ const t=(await db.transactions.listForProperty(pid)).find(x=>x.id===id); if(!t)return; const payments=(t.payments||[]).slice(); if(!payments[idx])return;
+    payments[idx]=Object.assign({},payments[idx],{[k]:(k==='amount'?((v===''||v==null)?null:Number(v)):v)});
+    try{ await db.transactions.update(id,{payments}); openTx(pid); }catch(e){toast(e.message||'Failed');} }
+  async function txDelPay(id,pid,idx){ const t=(await db.transactions.listForProperty(pid)).find(x=>x.id===id); if(!t)return; const payments=(t.payments||[]).slice(); payments.splice(idx,1);
+    try{ await db.transactions.update(id,{payments}); toast('Payment call removed'); openTx(pid); }catch(e){toast(e.message||'Failed');} }
 
   function adminPropLocations(){ const s=new Set(); PROPS.forEach(p=>{ const l=(p.location||'').trim(); if(l) s.add(l); }); return Array.from(s).sort((a,b)=>a.localeCompare(b)); }
   function propRowsHtml(list){
@@ -368,14 +390,12 @@
       <div class="row" style="gap:12px">
         <div class="field" style="flex:1"><label>Total number of units</label><input name="units" type="number" min="0" step="1" value="${(p.units===0||p.units)?p.units:''}"></div>
         <div class="field" style="flex:1"><label>Proposed delivery date</label><input name="deliveryDate" type="date" value="${esc(p.deliveryDate||'')}"></div></div>
-      ${(function(){ const ids=window.CODEV.unitIds(p.ref,p.units); return p.ref
-        ? `<div class="field"><label>Listing reference &amp; unit register</label>
-            <div class="card pad" style="background:var(--soft)">
-              <div class="spread"><b style="font-family:monospace;font-size:15px;color:var(--navy)">${esc(p.ref)}</b><button type="button" class="btn ghost sm" onclick="ADMIN.copyRef('${esc(p.ref)}')">Copy ref</button></div>
-              <div class="tiny muted" style="margin:8px 0 4px">${ids.length} unit tag${ids.length===1?'':'s'} — every unit carries the listing reference:</div>
-              <div style="max-height:130px;overflow:auto;font-family:monospace;font-size:12px;line-height:1.8">${ids.map(u=>esc(u)).join('<br>')||'<span class="muted">Set “Number of units” and save to generate unit tags.</span>'}</div>
+      ${p.ref
+        ? `<div class="field"><label>Listing reference</label>
+            <div class="card pad" style="background:var(--soft)"><div class="spread"><b style="font-family:monospace;font-size:15px;color:var(--navy)">${esc(p.ref)}</b><button type="button" class="btn ghost sm" onclick="ADMIN.copyRef('${esc(p.ref)}')">Copy ref</button></div>
+              <div class="tiny muted" style="margin:8px 0 0">${(p.units===0||p.units)?(esc(String(p.units))+' unit'+(Number(p.units)===1?'':'s')):'Units'} — each is implicitly tagged <b>${esc(p.ref)}-U001, U002 …</b> and that tag is applied to the relevant transaction for reference (not listed on the listing page).</div>
             </div></div>`
-        : `<div class="field"><label>Listing reference</label><div class="tiny muted">A unique reference (e.g. <b>CDV-XXXXXX</b>) and a tag for every unit (<b>CDV-XXXXXX-U001 …</b>) are generated automatically when a listing is submitted. This one has none yet — it will be assigned on save.</div></div>`; })()}
+        : `<div class="field"><label>Listing reference</label><div class="tiny muted">A unique reference (e.g. <b>CDV-XXXXXX</b>) is generated automatically when a listing is submitted; each unit is implicitly tagged <b>CDV-XXXXXX-U001 …</b> for transaction reference. This one has none yet — it will be assigned on save.</div></div>`}
       <div class="field"><label>Summary</label><textarea name="summary" rows="2">${esc(p.summary||'')}</textarea></div>
       <div class="field"><label>Photos <span class="tiny muted">— add or take a picture (up to 8). The <b>Cover</b> photo is what shows on the listing card; tap ★ on any photo to make it the cover.</span></label>
         <label class="photo-drop"><input type="file" accept="image/*,.heic,.heif" multiple onchange="ADMIN.addPhotos(this)"><span class="pd-inner">📷 Add photos or take a picture</span></label>
@@ -388,14 +408,12 @@
       <div class="field"><label>Assurance documents <span class="tiny muted">— upload each required document here; it is reviewed on the Legal review tab. You can publish regardless of document status.</span></label>
         <div id="docUpRows" class="grid" style="gap:8px">${admDocRows(p.id)}</div></div>
 
-      <div class="spread" style="margin:6px 0 4px"><label style="margin:0">Milestones &amp; timeline</label><button type="button" class="btn sm" onclick="ADMIN.addMs()">+ Milestone</button></div>
-      <div style="overflow-x:auto"><table><thead><tr><th>Milestone</th><th>%</th><th>Target date</th><th>Status</th><th></th></tr></thead><tbody id="msRows"></tbody></table></div>
-
-      <div class="spread" style="margin:14px 0 4px"><label style="margin:0">Payments &amp; capital calls</label><button type="button" class="btn sm" onclick="ADMIN.addPay()">+ Payment</button></div>
-      <div style="overflow-x:auto"><table><thead><tr><th>Label</th><th>Amount (₦)</th><th>Due date</th><th>Status</th><th></th></tr></thead><tbody id="payRows"></tbody></table></div>
+      <div class="spread" style="margin:6px 0 4px"><label style="margin:0">Construction schedule &amp; timeline</label><button type="button" class="btn sm" onclick="ADMIN.addMs()">+ Phase</button></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Phase</th><th>%</th><th>Target date</th><th>Status</th><th></th></tr></thead><tbody id="msRows"></tbody></table></div>
+      <p class="tiny muted" style="margin:6px 0 0">Payment calls &amp; payment status are tracked per deal — linked to a buyer and a specific unit — under <b>Transactions</b> for this listing, not on the listing.</p>
 
       <button class="btn primary" style="width:100%;margin-top:14px">Save changes</button></form>`;
-    renderMs(); renderPay(); renderImgs(); renderItems(); $('#modal').classList.add('show');
+    renderMs(); renderImgs(); renderItems(); $('#modal').classList.add('show');
   }
   const MAX_IMGS=8;
   function renderImgs(){ const box=$('#imgRows'); if(!box) return; box.innerHTML=EDIT.images.map((d,i)=>`<div class="ph-thumb${i===0?' is-cover':''}"><img src="${d}" alt="photo ${i+1}">${i===0?'<span class="cover-badge">Cover</span>':`<button type="button" class="mkcover" title="Make cover photo" aria-label="Make cover photo" onclick="ADMIN.makeCover(${i})">★</button>`}<button type="button" class="rmimg" aria-label="Remove photo" onclick="ADMIN.delImg(${i})">✕</button></div>`).join(''); }
@@ -419,7 +437,7 @@
     <td style="width:150px"><input type="date" value="${esc(m.targetDate||'')}" onchange="ADMIN.msSet(${i},'targetDate',this.value)"></td>
     <td style="width:160px"><select onchange="ADMIN.msSet(${i},'status',this.value)">${CFG.MILESTONE_STATUS.map(s=>`<option value="${s}" ${s===m.status?'selected':''}>${CFG.MILESTONE_STATUS_LABELS[s]||s}</option>`).join('')}</select></td>
     <td><button type="button" class="btn ghost sm" onclick="ADMIN.delMs(${i})">✕</button></td></tr>`).join('')||`<tr><td colspan="5" class="tiny muted">No milestones — add one.</td></tr>`; }
-  function renderPay(){ $('#payRows').innerHTML=EDIT.payments.map((p,i)=>`<tr class="subrow">
+  function renderPay(){ const _pr=$('#payRows'); if(!_pr) return; _pr.innerHTML=EDIT.payments.map((p,i)=>`<tr class="subrow">
     <td><input value="${esc(p.label||'')}" onchange="ADMIN.paySet(${i},'label',this.value)"></td>
     <td style="width:120px"><input type="number" value="${p.amount||0}" onchange="ADMIN.paySet(${i},'amount',Number(this.value))"></td>
     <td style="width:150px"><input type="date" value="${esc(p.dueDate||'')}" onchange="ADMIN.paySet(${i},'dueDate',this.value)"></td>
@@ -452,7 +470,7 @@
     const assignTo = (picked && picked.email !== (p.submittedBy||'')) ? picked : null;
     try{ await db.properties.update(id,{ title:f.title.value.trim(), developer:f.developer.value.trim(), location:f.location.value.trim(), summary:f.summary.value.trim(),
       address:f.address.value.trim(), items:(EDIT.items||[]).filter(it=>it.type), propertyType:'', bedrooms:'', price:'', units:f.units.value, deliveryDate:f.deliveryDate.value,
-      priceFrom:Number(f.priceFrom.value), stage:f.stage.value, status:f.status.value, legalStatus:f.legalStatus.value, milestones:EDIT.milestones, payments:EDIT.payments, images:EDIT.images,
+      priceFrom:Number(f.priceFrom.value), stage:f.stage.value, status:f.status.value, legalStatus:f.legalStatus.value, milestones:EDIT.milestones, images:EDIT.images,
       verifiedAt:willVerify?window.CODEV.now():null, ...(ref?{ref}:{}), ...(assignTo?{assignTo}:{}) });
       closeModal(); toast(assignTo?('Listing updated & assigned to '+(assignTo.name||assignTo.email)):'Listing, milestones & payments updated'); await load();
     }catch(err){ toast(err.message||'Save failed'); } return false; }
@@ -479,12 +497,11 @@
       <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Participation from (₦)</label><input name="priceFrom" type="number" value="0"></div>
         <div class="field" style="flex:1"><label>Construction stage</label><select name="stage">${CFG.STAGES.map(x=>`<option>${x}</option>`).join('')}</select></div>
         <div class="field" style="flex:1"><label>Status</label><select name="status">${['pending','verified','rejected'].map(x=>`<option>${x}</option>`).join('')}</select></div></div>
-      <div class="spread" style="margin:6px 0 4px"><label style="margin:0">Milestones &amp; timeline <span class="tiny muted">(optional — defaults applied if left empty)</span></label><button type="button" class="btn sm" onclick="ADMIN.addMs()">+ Milestone</button></div>
-      <div style="overflow-x:auto"><table><thead><tr><th>Milestone</th><th>%</th><th>Target date</th><th>Status</th><th></th></tr></thead><tbody id="msRows"></tbody></table></div>
-      <div class="spread" style="margin:14px 0 4px"><label style="margin:0">Payments &amp; capital calls</label><button type="button" class="btn sm" onclick="ADMIN.addPay()">+ Payment</button></div>
-      <div style="overflow-x:auto"><table><thead><tr><th>Label</th><th>Amount (₦)</th><th>Due date</th><th>Status</th><th></th></tr></thead><tbody id="payRows"></tbody></table></div>
+      <div class="spread" style="margin:6px 0 4px"><label style="margin:0">Construction schedule &amp; timeline <span class="tiny muted">(optional — defaults applied if left empty)</span></label><button type="button" class="btn sm" onclick="ADMIN.addMs()">+ Phase</button></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Phase</th><th>%</th><th>Target date</th><th>Status</th><th></th></tr></thead><tbody id="msRows"></tbody></table></div>
+      <p class="tiny muted" style="margin:6px 0 0">Payment calls are tracked per deal (buyer + unit) under Transactions, not on the listing.</p>
       <button class="btn primary" style="width:100%;margin-top:14px">Create listing</button></form>`;
-    renderMs(); renderPay(); renderImgs(); renderItems(); $('#modal').classList.add('show');
+    renderMs(); renderImgs(); renderItems(); $('#modal').classList.add('show');
   }
   async function createProp(e){ e.preventDefault(); const f=e.target;
     const assignTo=resolveAssign(f.assignTo.value); const status=f.status.value;
@@ -493,7 +510,6 @@
       items:(EDIT.items||[]).filter(it=>it.type), units:f.units.value, deliveryDate:f.deliveryDate.value,
       summary:f.summary.value.trim(), priceFrom:Number(f.priceFrom.value), stage:f.stage.value, images:EDIT.images };
     if((EDIT.milestones||[]).length) payload.milestones=EDIT.milestones;
-    if((EDIT.payments||[]).length) payload.payments=EDIT.payments;
     if(assignTo) payload.assignTo=assignTo;
     try{ const res=await db.properties.add(payload);
       const newId=(Array.isArray(res)&&res[0]&&res[0].id)||null;
@@ -644,7 +660,7 @@
     $('#modal').classList.add('show'); }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,copyRef,onTypeChange,addItem,delItem,itemSet,itemSize,reviewDoc,uploadDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,admAccess,delProp,editProp,saveProp,newProp,createProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,viewDev,openDevFile,openDevExtra,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+  window.ADMIN={login,lock,tab,setStatus,copyRef,onTypeChange,addItem,delItem,itemSet,itemSize,reviewDoc,uploadDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,txSetUnit,txAddPay,txPaySet,txDelPay,admAccess,delProp,editProp,saveProp,newProp,createProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,viewDev,openDevFile,openDevExtra,closeModal,forgot,backToLogin,forgotSend,forgotReset,
     addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps};
 
   // Session timeout in the admin console → message, then back to the sign-in gate.
