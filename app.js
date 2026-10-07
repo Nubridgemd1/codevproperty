@@ -23,8 +23,13 @@
     return `${s ? `<div class="tiny muted" style="margin:0 0 5px">${esc(s)}</div>` : ''}${(p.price === 0 || p.price) ? `<div class="tiny" style="margin:0 0 6px;font-weight:700;color:var(--navy)">Price ${fmtN(p.price)}</div>` : ''}`; }
   // Listing-detail properties table (each item with its price).
   function listingItemsHtml(p) { const items = p.items || []; if (!items.length) return '';
+    const totUnits = items.reduce((s, it) => s + (Number(it && it.units) || 0), 0);
+    const typeCount = items.filter(it => it && it.type).length;
+    const totalLine = totUnits > 0
+      ? `<div class="tiny muted" style="margin-top:8px;text-align:right">Total: <b style="color:var(--navy)">${totUnits} unit${totUnits === 1 ? '' : 's'}</b> across ${typeCount} propert${typeCount === 1 ? 'y type' : 'y types'}</div>`
+      : '';
     return `<div class="card pad" style="margin-top:14px"><h3 style="margin:0 0 8px;font-size:15px">Properties in this development</h3>
-      <table style="font-size:13px;width:100%"><tbody>${items.map(it => `<tr><td>${esc(window.CODEV.itemLabel(it))}</td><td style="text-align:right;white-space:nowrap;font-weight:700;color:var(--bronze)">${(it.price === 0 || it.price) ? fmtN(it.price) : '—'}</td></tr>`).join('')}</tbody></table></div>`; }
+      <table style="font-size:13px;width:100%"><tbody>${items.map(it => `<tr><td>${esc(window.CODEV.itemLabel(it))}</td><td style="text-align:right;white-space:nowrap;font-weight:700;color:var(--bronze)">${(it.price === 0 || it.price) ? fmtN(it.price) : '—'}</td></tr>`).join('')}</tbody></table>${totalLine}</div>`; }
   // ---- Legal report + queries + transactions (shared render) ----
   const DISPO_LBL = { cleared: 'Cleared', conditional: 'Conditionally cleared', material_issue: 'Material issue', rejected: 'Rejected' };
   const TX_TYPE_LBL = { reservation: 'Reservation', sale: 'Sale / purchase', subscription: 'SPV subscription', jv: 'Joint venture' };
