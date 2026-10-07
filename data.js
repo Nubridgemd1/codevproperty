@@ -126,6 +126,7 @@ window.CODEV = (function () {
     summary: r.summary, priceFrom: r.price_from, stage: r.stage, status: r.status,
     legalStatus: r.legal_status || 'not_submitted', legalReviewedAt: r.legal_reviewed_at || null,
     submittedBy: r.submitted_by_email, submittedByRole: r.submitted_by_role, createdAt: r.created_at, verifiedAt: r.verified_at,
+    assignedTo: r.assigned_to_email || '', assignedToId: r.assigned_to || '', assignedBy: r.assigned_by || '', assignedAt: r.assigned_at || null,
     milestones: Array.isArray(r.milestones) ? r.milestones : [], payments: Array.isArray(r.payments) ? r.payments : [],
     images: Array.isArray(r.images) ? r.images : [] });
 
@@ -202,14 +203,23 @@ window.CODEV = (function () {
       async listAll() { return (await sb('/rest/v1/properties?order=created_at.desc&select=*')).map(toProp); },
       async byId(id) { const r = await sb('/rest/v1/properties?id=eq.' + id + '&select=*', { anon: true }); return r && r[0] ? toProp(r[0]) : null; },
       async add(p) { const s = getSession();
+        // When an admin creates a listing ON BEHALF OF a developer (p.assignTo = {id,email}),
+        // attribute ownership to that developer so it shows in their portal (listMine filters on
+        // submitted_by) and record the assignment so the developer gets auto-notified.
+        const assignTo = (p.assignTo && p.assignTo.id) ? p.assignTo : null;
+        const ownerId = assignTo ? assignTo.id : s.user.id;
+        const ownerEmail = assignTo ? assignTo.email : s.user.email;
+        const ownerRole = assignTo ? 'developer' : ((s.profile && s.profile.role) || p.submittedByRole);
         const row = { title: p.title, developer: p.developer, location: p.location, summary: p.summary, price_from: p.priceFrom, stage: p.stage,
           milestones: p.milestones || defaultMilestones(), payments: p.payments || [],
-          submitted_by: s.user.id, submitted_by_email: s.user.email, submitted_by_role: (s.profile && s.profile.role) || p.submittedByRole };
+          submitted_by: ownerId, submitted_by_email: ownerEmail, submitted_by_role: ownerRole };
         const extra = { address: p.address || null, property_type: p.propertyType || null,
           bedrooms: p.bedrooms || null, price: (p.price === '' || p.price == null) ? null : Number(p.price),
           property_items: Array.isArray(p.items) ? p.items : [],
           units: (p.units === '' || p.units == null) ? null : Number(p.units), delivery_date: p.deliveryDate || null,
           ref: p.ref || makeListingRef() }; // unique reference assigned at submission (before admin verification)
+        if (assignTo) { extra.assigned_to = assignTo.id; extra.assigned_to_email = assignTo.email;
+          extra.assigned_by = (s.user && s.user.email) || null; extra.assigned_at = nowISO(); }
         const withAll = Object.assign({}, row, extra, { images: p.images || [] });
         try { return await sb('/rest/v1/properties', { method: 'POST', body: withAll, prefer: 'return=representation' }); }
         catch (e) { // Degrade gracefully if the DB is missing newer columns (images / address / property_type / units / delivery_date).
@@ -235,6 +245,13 @@ window.CODEV = (function () {
         if ('units' in patch) { row.units = (patch.units === '' || patch.units == null) ? null : Number(patch.units); newKeys.push('units'); }
         if ('deliveryDate' in patch) { row.delivery_date = patch.deliveryDate || null; newKeys.push('delivery_date'); }
         if ('legalStatus' in patch) { row.legal_status = patch.legalStatus; row.legal_reviewed_at = ['cleared','conditionally_cleared'].indexOf(patch.legalStatus)>=0 ? nowISO() : null; }
+        // Admin (re)assigns a listing to a developer: move ownership so it appears in the developer's
+        // portal, and stamp the assignment so the notify-developer trigger fires.
+        if ('assignTo' in patch && patch.assignTo && patch.assignTo.id) { const s2 = getSession();
+          row.submitted_by = patch.assignTo.id; row.submitted_by_email = patch.assignTo.email; row.submitted_by_role = 'developer';
+          row.assigned_to = patch.assignTo.id; row.assigned_to_email = patch.assignTo.email;
+          row.assigned_by = (s2 && s2.user && s2.user.email) || null; row.assigned_at = nowISO();
+          newKeys.push('assigned_to','assigned_to_email','assigned_by','assigned_at'); }
         try { return await sb('/rest/v1/properties?id=eq.' + id, { method: 'PATCH', body: row, prefer: 'return=representation' }); }
         catch (e) { // If newer columns aren't migrated yet, save the rest and flag it rather than losing the edit.
           const msg = (e && e.message) || ''; if (!newKeys.length || !/address|property_type|units|delivery_date|column|schema cache/i.test(msg)) throw e;
