@@ -238,14 +238,14 @@
 
   // ---- views (return HTML strings; data passed in) ----
   const V = {
-    home(opps, counts) { const devCount = new Set(opps.map(o => o.developer).filter(Boolean)).size; return `<section class="hero"><div class="wrap" style="padding:54px 22px;text-align:center">
-      <span class="eyebrow">🏛️ Nigeria MVP · Ikoyi · Victoria Island · Lekki · Ikeja GRA</span>
-      <h1 style="font-size:42px;line-height:1.06;margin:12px auto 14px;max-width:15ch">Co-develop premium property — <em style="font-style:italic;color:var(--bronze)">before</em> the developer's margin.</h1>
-      <p class="muted" style="font-size:16px;max-width:62ch;margin:0 auto 22px">Discover verified developments, qualify privately, structure through professional legal, fund on milestones and monitor construction to ownership — all in one governed digital journey.</p>
-      <div class="row" style="justify-content:center;gap:10px"><a class="btn primary" href="#/opportunities">Explore opportunities</a><a class="btn" href="#/how">How co-development works</a></div>
-      <div style="display:flex;justify-content:center">${flowStrip()}</div>
+    home(opps, counts) { const devCount = new Set(opps.map(o => o.developer).filter(Boolean)).size; return `<section class="hero"><div class="wrap" style="padding:66px 22px 60px;text-align:left">
+      <span class="eyebrow" style="letter-spacing:.12em">🌍 Co-development · Property · Global access</span>
+      <h1 style="font-size:clamp(32px,5vw,52px);line-height:1.06;margin:14px 0 14px;max-width:16ch">Co-develop <em style="font-style:italic;color:var(--bronze2)">exceptional</em> property.<br>Participate from the start.</h1>
+      <p class="muted" style="font-size:17px;max-width:60ch;margin:0 0 24px">CoDev brings buyers, developers and capital together through a transparent, professionally governed platform — creating access to carefully selected property developments from inception to completion.</p>
+      <div class="row" style="justify-content:flex-start;gap:10px"><a class="btn primary" href="#/opportunities">Explore Developments</a><a class="btn" href="#/how">How CoDev Works</a></div>
+      <div style="display:flex;justify-content:flex-start">${flowStrip()}</div>
       <div class="hero-stats">
-        <div><div class="n">4</div><div class="l">Prime Lagos markets</div></div>
+        <div><div class="n">4</div><div class="l">Curated prime markets<br><span style="opacity:.72">Lagos today · UK/US roadmap</span></div></div>
         <div><div class="n">${opps.length}</div><div class="l">Curated opportunities</div></div>
         <div><div class="n">${devCount}</div><div class="l">Verified developers</div></div>
         <div><div class="n">Milestone</div><div class="l">Escrow-governed funding</div></div>
