@@ -613,27 +613,27 @@
   const FUNDING_METHODS = ['Cash / Savings', 'Business / Corporate funds', 'Mortgage', 'Investment finance', 'Sale of existing asset', 'Investment portfolio', 'Combination', 'Other'];
   const SOURCE_OF_FUNDS = ['Employment income', 'Business income', 'Savings', 'Investments', 'Property / asset sale', 'Inheritance', 'Corporate funds', 'Loan / mortgage', 'Other'];
   const optionList = (opts) => opts.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
-  // Amount bands anchored in USD, converted to the chosen currency using super-admin-editable FX rates.
-  const AMOUNT_USD = [25000, 50000, 100000, 250000, 500000, 1000000];
+  // Amount bands are in Naira (₦) — the platform's only currency.
+  const AMOUNT_NGN = [10000000, 25000000, 50000000, 100000000, 250000000, 500000000];
   let _fx = null;
-  function fmtCur(v, sym) { return sym + Math.round(v).toLocaleString('en-US'); }
-  function amountBands(cur, fx) { const r = (fx && fx[cur]) || 1; const sym = (CFG.CURRENCY_SYMBOLS || {})[cur] || (cur + ' ');
-    const out = ['Under ' + fmtCur(AMOUNT_USD[0] * r, sym)];
-    for (let i = 1; i < AMOUNT_USD.length; i++) out.push(fmtCur(AMOUNT_USD[i - 1] * r, sym) + ' – ' + fmtCur(AMOUNT_USD[i] * r, sym));
-    out.push(fmtCur(AMOUNT_USD[AMOUNT_USD.length - 1] * r, sym) + '+'); return out; }
-  function qCurrency(cur) { const labels = amountBands(cur, _fx); ['qAmount', 'qCapacity'].forEach(function (id) { const s = document.getElementById(id); if (!s) return; const idx = s.selectedIndex; s.innerHTML = labels.map(function (l) { return '<option value="' + esc(l) + '">' + esc(l) + '</option>'; }).join(''); if (idx >= 0) s.selectedIndex = idx; }); }
+  function fmtCur(v, sym) { return (sym || '₦') + Math.round(v).toLocaleString('en-US'); }
+  function amountBands() { const sym = '₦';
+    const out = ['Under ' + fmtCur(AMOUNT_NGN[0], sym)];
+    for (let i = 1; i < AMOUNT_NGN.length; i++) out.push(fmtCur(AMOUNT_NGN[i - 1], sym) + ' – ' + fmtCur(AMOUNT_NGN[i], sym));
+    out.push(fmtCur(AMOUNT_NGN[AMOUNT_NGN.length - 1], sym) + '+'); return out; }
+  function qCurrency() { /* currency is Naira only — no conversion */ }
   async function express(id) { if (!requireLogin(() => express(id))) return;
     try { _fx = await db.settings.getFx(); } catch (e) { _fx = CFG.FX_DEFAULT; } if (!_fx) _fx = CFG.FX_DEFAULT;
     let p = null; try { p = await db.properties.byId(id); } catch {}
     const title = (p && p.title) || 'this development'; CODEVAPP._q = { id, title, dev: (p && p.developer) || '' };
-    const cur0 = CURRENCIES[0]; const amtOpts = optionList(amountBands(cur0, _fx));
+    const amtOpts = optionList(amountBands());
     const sel = (name, opts, extra) => `<select name="${name}" ${extra || ''}>${optionList(opts)}</select>`;
     $('#authTitle').textContent = 'Investor qualification';
     $('#authBody').innerHTML = `<p class="small muted" style="margin-top:0">Complete your investor profile for <b>${esc(title)}</b>. CoDev reviews and verifies every applicant before Deal Room access — this is how we match verified capital to the right opportunity.</p>
       <form onsubmit="return CODEVAPP.submitQualify(event)">
         <div class="field"><label>Investor type</label>${sel('investorType', INVESTOR_TYPES, 'required')}</div>
         <div class="field"><label>Interested unit / property type <span class="tiny muted">(optional)</span></label><input name="unitType" placeholder="e.g. 3-bed apartment, whole floor, SPV participation…"></div>
-        <div class="row" style="gap:10px"><div class="field" style="flex:2;min-width:150px"><label>Investment / purchase amount</label><select name="amountBand" id="qAmount" required>${amtOpts}</select></div><div class="field" style="flex:1;min-width:90px"><label>Currency</label><select name="currency" id="qCurrency" onchange="CODEVAPP.qCurrency(this.value)">${optionList(CURRENCIES)}</select></div></div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:2;min-width:150px"><label>Investment / purchase amount</label><select name="amountBand" id="qAmount" required>${amtOpts}</select></div><div class="field" style="flex:1;min-width:90px"><label>Currency</label><input value="₦ Naira (NGN)" readonly style="background:var(--soft)"><input type="hidden" name="currency" value="NGN"></div></div>
         <div class="field"><label>Investment objective</label>${sel('objective', OBJECTIVES, 'required')}</div>
         <div class="field"><label>Investment readiness</label>${sel('readiness', READINESS, 'required')}</div>
         <div class="field"><label>Funding method</label>${sel('fundingMethod', FUNDING_METHODS, 'required')}</div>
