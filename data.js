@@ -61,10 +61,11 @@ window.CODEV = (function () {
     MILESTONE_STATUS: ['pending', 'in-progress', 'certified'],
     // Display labels for milestone (payment-release) status; keys above stay stable in the DB.
     MILESTONE_STATUS_LABELS: { 'pending': 'Payment Pending', 'in-progress': 'Payment in-Progress', 'certified': 'Payment Completed' },
-    // Currency is Naira (₦) only across the platform.
-    CURRENCIES: ['NGN'],
-    CURRENCY_SYMBOLS: { NGN: '₦' },
-    FX_DEFAULT: { NGN: 1 },
+    // Investor amount bands are anchored in USD; these rates convert them for display.
+    // A super admin can edit them (persisted in platform_settings — see PLATFORM-SETTINGS.sql).
+    CURRENCIES: ['USD', 'NGN', 'GBP'],
+    CURRENCY_SYMBOLS: { USD: '$', NGN: '₦', GBP: '£' },
+    FX_DEFAULT: { USD: 1, NGN: 1600, GBP: 0.79 },
     PAYMENT_STATUS: ['due', 'paid'],
     // Admin role-based access control. An admin's `permissions` array grants specific rights.
     PERMISSIONS: [
