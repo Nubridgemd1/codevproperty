@@ -11,7 +11,7 @@
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=18" />
+<link rel="stylesheet" href="styles.css?v=20" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -50,7 +50,7 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=18"></script>
+<script src="data.js?v=20"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
@@ -448,15 +448,16 @@
   function itemRowHtml(it,i){ const res=CFG.RESIDENTIAL_TYPES.indexOf(it.type)>=0, land=CFG.LAND_TYPES.indexOf(it.type)>=0;
     const typeSel=`<div class="field" style="flex:2;min-width:150px;margin:0"><label class="tiny muted">Property type</label><select onchange="ADMIN.itemSet(${i},'type',this.value)"><option value="">—</option>${CFG.PROPERTY_TYPES.map(x=>`<option ${x===it.type?'selected':''}>${x}</option>`).join('')}</select></div>`;
     const bedSel=res?`<div class="field" style="flex:1;min-width:120px;margin:0"><label class="tiny muted">Bedrooms</label><select onchange="ADMIN.itemSet(${i},'bedrooms',this.value)"><option value="">—</option>${CFG.BEDROOMS.map(x=>`<option ${x===it.bedrooms?'selected':''}>${x}</option>`).join('')}</select></div>`:'';
-    const landF=land?`<div class="field" style="flex:1;min-width:100px;margin:0"><label class="tiny muted">Size (sqm)</label><input type="number" min="0" value="${esc(it.landSqm||'')}" oninput="ADMIN.itemSize(${i},'landSqm',this.value)"></div><div class="field" style="flex:1;min-width:100px;margin:0"><label class="tiny muted">Size (sqft)</label><input type="number" min="0" value="${esc(it.landSqft||'')}" oninput="ADMIN.itemSize(${i},'landSqft',this.value)"></div>`:'';
+    const landF=land?`<div class="field" style="flex:1;min-width:100px;margin:0"><label class="tiny muted">Size (sqm)</label><input type="number" min="0" value="${esc(it.landSqm||'')}" oninput="ADMIN.itemSize(${i},'landSqm',this.value)"></div><div class="field" style="flex:1;min-width:100px;margin:0"><label class="tiny muted">Size (sqft)</label><input type="number" min="0" value="${esc(it.landSqft||'')}" oninput="ADMIN.itemSize(${i},'landSqft',this.value)"></div><div class="field" style="flex:2;min-width:190px;margin:0"><label class="tiny muted">Coordinates (lat, lng)</label><input type="text" inputmode="decimal" placeholder="e.g. 6.4281, 3.4219" value="${esc(it.coords||'')}" onchange="ADMIN.itemCoords(${i},this)"><div class="tiny muted" id="coordHint_${i}" style="margin-top:3px">Decimal degrees (WGS-84). Google-Maps links accepted.</div></div>`:'';
     const unitsF=`<div class="field" style="flex:1;min-width:90px;margin:0"><label class="tiny muted">Units</label><input type="number" min="0" step="1" value="${(it.units===0||it.units)?it.units:''}" onchange="ADMIN.itemSet(${i},'units',this.value)"></div>`;
     const priceF=`<div class="field" style="flex:1;min-width:120px;margin:0"><label class="tiny muted">Price (₦)</label><input type="number" min="0" value="${(it.price===0||it.price)?it.price:''}" onchange="ADMIN.itemSet(${i},'price',this.value)"></div>`;
     return `<div class="card pad" style="background:var(--soft)"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">${typeSel}${bedSel}${landF}${unitsF}${priceF}<button type="button" class="btn ghost sm danger" onclick="ADMIN.delItem(${i})">✕</button></div></div>`; }
   function renderItems(){ const box=$('#itemRows'); if(!box) return; box.innerHTML=(EDIT.items||[]).map((it,i)=>itemRowHtml(it,i)).join('')||'<div class="tiny muted">No properties added yet — click “+ Add property”.</div>'; }
-  function itemSet(i,k,v){ EDIT.items[i][k]=v; if(k==='type'){ EDIT.items[i].bedrooms=''; EDIT.items[i].landSqm=''; EDIT.items[i].landSqft=''; renderItems(); } }
+  function itemSet(i,k,v){ EDIT.items[i][k]=v; if(k==='type'){ EDIT.items[i].bedrooms=''; EDIT.items[i].landSqm=''; EDIT.items[i].landSqft=''; EDIT.items[i].coords=''; renderItems(); } }
+  function itemCoords(i,el){ const raw=el.value.trim(); const hint=$('#coordHint_'+i); const c=window.CODEV.parseCoords(raw); if(!raw){ EDIT.items[i].coords=''; el.style.borderColor=''; if(hint){hint.textContent='Decimal degrees (WGS-84). Google-Maps links accepted.';hint.style.color='';} return; } if(c){ const norm=c.lat+', '+c.lng; EDIT.items[i].coords=norm; el.value=norm; el.style.borderColor='var(--green)'; if(hint){hint.textContent='✓ '+norm;hint.style.color='var(--green)';} } else { EDIT.items[i].coords=raw; el.style.borderColor='var(--red)'; if(hint){hint.textContent='✗ Not a valid coordinate — use e.g. 6.4281, 3.4219';hint.style.color='var(--red)';} } }
   function itemSize(i,k,v){ EDIT.items[i][k]=v; const A=10.7639; if(k==='landSqm'){ EDIT.items[i].landSqft=v?String(Math.round(Number(v)*A)):''; } else if(k==='landSqft'){ EDIT.items[i].landSqm=v?String(Math.round(Number(v)/A)):''; } const other=k==='landSqm'?'landSqft':'landSqm'; const el=document.querySelector(`#itemRows .card:nth-child(${i+1}) input[oninput*="'${other}'"]`); if(el) el.value=EDIT.items[i][other]; }
   function delItem(i){ EDIT.items.splice(i,1); renderItems(); }
-  function addItem(){ EDIT.items.push({type:'',bedrooms:'',landSqm:'',landSqft:'',units:'',price:''}); renderItems(); }
+  function addItem(){ EDIT.items.push({type:'',bedrooms:'',landSqm:'',landSqft:'',coords:'',units:'',price:''}); renderItems(); }
   // ---- Assign-to-developer helpers (shared by create + edit) ----
   function devOptions(selectedId){ const devs=(ACCS||[]).filter(a=>a.role==='developer');
     if(!devs.length) return '<option value="" disabled>(no developer accounts yet)</option>';
@@ -660,7 +661,7 @@
     $('#modal').classList.add('show'); }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,copyRef,onTypeChange,addItem,delItem,itemSet,itemSize,reviewDoc,uploadDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,txSetUnit,txAddPay,txPaySet,txDelPay,admAccess,delProp,editProp,saveProp,newProp,createProp,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,viewDev,openDevFile,openDevExtra,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+  window.ADMIN={login,lock,tab,setStatus,copyRef,onTypeChange,addItem,delItem,itemSet,itemSize,reviewDoc,uploadDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,txSetUnit,txAddPay,txPaySet,txDelPay,admAccess,delProp,editProp,saveProp,newProp,createProp,itemCoords,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,viewDev,openDevFile,openDevExtra,closeModal,forgot,backToLogin,forgotSend,forgotReset,
     addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps};
 
   // Session timeout in the admin console → message, then back to the sign-in gate.

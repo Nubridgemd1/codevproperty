@@ -258,6 +258,8 @@ window.CODEV = (function () {
           CFG.listingFieldsUnavailable = true; newKeys.forEach(k => delete row[k]);
           return sb('/rest/v1/properties?id=eq.' + id, { method: 'PATCH', body: row, prefer: 'return=representation' }); } },
       async setStatus(id, status) { return sbDB.properties.update(id, { status, verifiedAt: status === 'verified' ? nowISO() : null }); },
+      // Developer self-service: updates ONLY pricing on a listing they own (via SECURITY DEFINER fn).
+      async updatePricing(id, { items, priceFrom }) { return sb('/rest/v1/rpc/dev_update_listing_pricing', { method: 'POST', body: { p_id: id, p_items: Array.isArray(items) ? items : [], p_price_from: (priceFrom === '' || priceFrom == null) ? null : Number(priceFrom) } }); },
       async remove(id) { return sb('/rest/v1/properties?id=eq.' + id, { method: 'DELETE' }); },
     },
     profiles: {
@@ -442,6 +444,7 @@ window.CODEV = (function () {
       async add(p) { const s = rd(L.sess, null); const list = rd(L.prop, []); const rec = { id: uid(), ref: (p && p.ref) || makeListingRef(), status: 'pending', createdAt: nowISO(), submittedBy: s && s.email, submittedByRole: s && s.role, milestones: defaultMilestones(), payments: [], ...p }; if (!rec.ref) rec.ref = makeListingRef(); list.unshift(rec); wr(L.prop, list); return rec; },
       async update(id, patch) { const list = rd(L.prop, []); const i = list.findIndex(p => p.id === id); if (i < 0) return; list[i] = { ...list[i], ...patch }; wr(L.prop, list); return list[i]; },
       async setStatus(id, status) { return localDB.properties.update(id, { status, verifiedAt: status === 'verified' ? nowISO() : undefined }); },
+      async updatePricing(id, { items, priceFrom }) { return localDB.properties.update(id, { items: Array.isArray(items) ? items : [], priceFrom: (priceFrom === '' || priceFrom == null) ? undefined : Number(priceFrom) }); },
       async remove(id) { wr(L.prop, rd(L.prop, []).filter(p => p.id !== id)); },
     },
     profiles: {
@@ -570,5 +573,28 @@ window.CODEV = (function () {
     return { min: Math.min.apply(null, nums), max: Math.max.apply(null, nums) };
   };
 
-  return { CFG, auth, db, fmtN, esc, now: nowISO, makeListingRef, unitIds, isResidential, isLand, propTypeLabel, itemLabel, priceRange };
+  // Parse a coordinate string into decimal-degrees {lat,lng} (WGS84). Accepts
+  // "6.4281, 3.4219", "6.4281 3.4219", a Google Maps "@6.4281,3.4219,15z" or
+  // "?q=6.4281,3.4219" URL, and N/S/E/W suffixes (e.g. "6.4281N, 3.4219E").
+  const parseCoords = (raw) => {
+    if (!raw) return null;
+    let s = String(raw).trim();
+    const at = s.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/) || s.match(/[?&]q=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+    let lat, lng;
+    if (at) { lat = parseFloat(at[1]); lng = parseFloat(at[2]); }
+    else {
+      const parts = s.replace(/[;|]/g, ',').split(/[\s,]+/).filter(Boolean);
+      if (parts.length < 2) return null;
+      const num = (p) => { const m = String(p).match(/^(-?\d+(?:\.\d+)?)\s*([NSEWnsew])?$/); if (!m) return null; let v = parseFloat(m[1]); const h = (m[2] || '').toUpperCase(); if (h === 'S' || h === 'W') v = -v; return { v, h }; };
+      const a = num(parts[0]), b = num(parts[1]); if (!a || !b) return null;
+      // honour hemispheres if given; otherwise assume "lat, lng" order
+      if (a.h === 'E' || a.h === 'W' || b.h === 'N' || b.h === 'S') { lat = b.v; lng = a.v; } else { lat = a.v; lng = b.v; }
+    }
+    if (!isFinite(lat) || !isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6 };
+  };
+  const coordsLabel = (raw) => { const c = parseCoords(raw); return c ? c.lat + ', ' + c.lng : ''; };
+  const mapUrl = (raw) => { const c = parseCoords(raw); return c ? 'https://www.google.com/maps?q=' + c.lat + ',' + c.lng : ''; };
+
+  return { CFG, auth, db, fmtN, esc, now: nowISO, makeListingRef, unitIds, isResidential, isLand, propTypeLabel, itemLabel, priceRange, parseCoords, coordsLabel, mapUrl };
 })();

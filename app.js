@@ -29,7 +29,7 @@
       ? `<div class="tiny muted" style="margin-top:8px;text-align:right">Total: <b style="color:var(--navy)">${totUnits} unit${totUnits === 1 ? '' : 's'}</b> across ${typeCount} propert${typeCount === 1 ? 'y type' : 'y types'}</div>`
       : '';
     return `<div class="card pad" style="margin-top:14px"><h3 style="margin:0 0 8px;font-size:15px">Properties in this development</h3>
-      <table style="font-size:13px;width:100%"><tbody>${items.map(it => `<tr><td>${esc(window.CODEV.itemLabel(it))}</td><td style="text-align:right;white-space:nowrap;font-weight:700;color:var(--bronze)">${(it.price === 0 || it.price) ? fmtN(it.price) : '—'}</td></tr>`).join('')}</tbody></table>${totalLine}</div>`; }
+      <table style="font-size:13px;width:100%"><tbody>${items.map(it => { const mu = window.CODEV.mapUrl(it.coords); const mapLink = mu ? `<br><a class="tiny" href="${mu}" target="_blank" rel="noopener" style="color:var(--bronze)">📍 ${esc(window.CODEV.coordsLabel(it.coords))} — view on map</a>` : ''; return `<tr><td>${esc(window.CODEV.itemLabel(it))}${mapLink}</td><td style="text-align:right;white-space:nowrap;font-weight:700;color:var(--bronze)">${(it.price === 0 || it.price) ? fmtN(it.price) : '—'}</td></tr>`; }).join('')}</tbody></table>${totalLine}</div>`; }
   // ---- Legal report + queries + transactions (shared render) ----
   const DISPO_LBL = { cleared: 'Cleared', conditional: 'Conditionally cleared', material_issue: 'Material issue', rejected: 'Rejected' };
   const TX_TYPE_LBL = { reservation: 'Reservation', sale: 'Sale / purchase', subscription: 'SPV subscription', jv: 'Joint venture' };
@@ -290,7 +290,7 @@
             <p class="tiny muted" style="margin-top:8px">Complete a short investor qualification. CoDev verifies applicants before granting Deal Room access to confidential project documents.</p></div></div></section>`; },
     how() { const steps = [['List', 'A developer or property owner submits a development or plot.'], ['Verify', 'Admin reviews and verifies the listing before it goes public.'], ['Co-develop', 'Investors browse verified opportunities and express interest.'], ['Govern', 'Milestone-based structure with timelines & payments; funds are released through licensed escrow partners against verified construction milestones.']];
       return sec('How it works', 'From listing to verification to co-development.', `<div class="grid g2">${steps.map((s, i) => `<div class="card pad row" style="gap:14px;align-items:flex-start"><span class="step-n">${i + 1}</span><div><h3 style="margin:0 0 4px;font-size:18px">${s[0]}</h3><p class="small muted" style="margin:0">${s[1]}</p></div></div>`).join('')}</div>`); },
-    list(u, mine) { listingPhotos = []; listingItems = [{ type: '', bedrooms: '', landSqm: '', landSqft: '', units: '', price: '' }]; listingDocs = {};
+    list(u, mine) { listingPhotos = []; listingItems = [{ type: '', bedrooms: '', landSqm: '', landSqft: '', coords: '', units: '', price: '' }]; listingDocs = {};
       return sec('List a property', 'Developers and property owners can list here. Submissions are verified by admin before they go public.',
       `<div class="grid g2" style="align-items:start">
         <form class="card pad" onsubmit="return CODEVAPP.submitProperty(event)">
@@ -351,6 +351,26 @@
         <div class="tiny muted" style="margin-bottom:14px">Deals are created by CoDev once a buyer is verified for this listing. Record and update payment calls (label, amount, due date, status) per buyer + unit here — this never appears on the public listing.</div>
         <div class="grid" style="gap:10px">${txs.length ? txs.map(t => devTxCard(t, p)).join('') : '<div class="card pad small muted">No deals yet. When CoDev verifies a buyer for this listing and creates a deal, it will appear here.</div>'}</div>`);
     },
+    pricing(u, p) {
+      if (!p) return sec('Not found', '', empty('Listing not found.'));
+      const isOwner = u && p.submittedBy && u.email && String(p.submittedBy).toLowerCase() === String(u.email).toLowerCase();
+      const back = u && u.role === 'developer' ? '#/developer' : '#/account';
+      if (!isOwner) return sec('', '', `<a class="small muted" href="${back}">← Back</a>${empty('You can only update pricing on your own listings.')}`);
+      pricingPid = p.id; pricingBase = JSON.parse(JSON.stringify(p.items || []));
+      const rows = pricingBase.length ? pricingBase.map((it, i) => `<tr>
+          <td>${esc(window.CODEV.itemLabel(it))}</td>
+          <td style="width:200px"><div class="row" style="gap:6px;align-items:center;margin:0"><span class="tiny muted">₦</span><input id="pprice_${i}" type="number" min="0" value="${(it.price === 0 || it.price) ? it.price : ''}" placeholder="Price" style="margin:0"></div></td>
+        </tr>`).join('') : `<tr><td colspan="2" class="tiny muted">This listing has no property items yet — add them from the admin editor or re-list.</td></tr>`;
+      return sec('', '', `<a class="small muted" href="${back}">← Back to my listings</a>
+        <h1 style="font-size:26px;margin:8px 0 2px">${esc(p.title)} — update pricing</h1>
+        <div class="muted" style="margin-bottom:2px">${p.ref ? 'Ref ' + esc(p.ref) + ' · ' : ''}Update the price of each property / unit type and the headline &ldquo;from&rdquo; price buyers see.</div>
+        <div class="tiny muted" style="margin-bottom:14px">You can edit pricing on your own listing at any time; other details (type, size, documents) are managed with CoDev. Changes appear on the public listing immediately.</div>
+        <div class="card pad">
+          <div style="overflow-x:auto"><table style="font-size:14px;width:100%"><thead><tr><th style="text-align:left">Property / unit type</th><th style="text-align:left">Price (₦)</th></tr></thead><tbody>${rows}</tbody></table></div>
+          <div class="field" style="max-width:280px;margin:16px 0 0"><label class="tiny muted">Headline &ldquo;from&rdquo; price shown on the listing (₦)</label><input id="ppricefrom" type="number" min="0" value="${(p.priceFrom === 0 || p.priceFrom) ? p.priceFrom : ''}" placeholder="e.g. 25000000"></div>
+          <div class="row" style="gap:10px;margin-top:16px"><button class="btn primary" onclick="CODEVAPP.savePricing()">Save pricing</button><a class="btn" href="${back}">Cancel</a></div>
+        </div>`);
+    },
     dealRoom(u, p, st) {
       if (!p) return sec('Not found', '', empty('Development not found.'));
       const head = `<a class="small muted" href="#/opp/${p.id}">← Back to ${esc(p.title)}</a>
@@ -381,7 +401,7 @@
   };
   function listCards(mine) { if (!mine || !mine.length) return `<div class="card pad small muted">No submissions yet. <a href="#/list">List a property →</a></div>`;
     return `<div class="grid" style="gap:10px">${mine.map(p => `<div class="card pad"><div class="spread"><div class="row" style="gap:11px;align-items:center">${p.images && p.images[0] ? `<img src="${p.images[0]}" alt="" style="width:48px;height:48px;border-radius:9px;object-fit:cover;flex:none">` : ''}<div><b>${esc(p.title)}</b>${p.ref ? ` <span class="tiny" style="font-family:monospace;color:var(--ink2)">${esc(p.ref)}</span>` : ''}<div class="tiny muted">${esc(p.location)} · ${fmtN(p.priceFrom)} · funded ${funded(p)}%</div></div></div><span class="badge ${p.status}">${p.status}</span></div>
-      <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><a class="btn primary sm" href="#/docs/${p.id}">📤 Upload / manage documents</a><a class="btn sm" href="#/deals/${p.id}">💳 Deals &amp; payment calls</a></div></div>`).join('')}</div>`; }
+      <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><a class="btn sm" href="#/pricing/${p.id}">💲 Update pricing</a><a class="btn primary sm" href="#/docs/${p.id}">📤 Upload / manage documents</a><a class="btn sm" href="#/deals/${p.id}">💳 Deals &amp; payment calls</a></div></div>`).join('')}</div>`; }
   function docRowDev(pid, r) { const d = r.doc || {}; const st = d.status || 'awaiting';
     return `<div class="card pad">
       <div class="spread"><b>${esc(r.label)}</b>${docStatusBadge(st)}</div>
@@ -411,6 +431,14 @@
     try { await db.transactions.update(id, { payments }); route(); } catch (e) { toast((e && e.message) || 'Failed'); } }
   async function devTxDelPay(pid, id, idx) { const t = (await db.transactions.listForProperty(pid)).find(x => x.id === id); if (!t) return; const payments = (t.payments || []).slice(); payments.splice(idx, 1);
     try { await db.transactions.update(id, { payments }); toast('Payment call removed'); route(); } catch (e) { toast((e && e.message) || 'Failed'); } }
+  let pricingBase = [], pricingPid = null;
+  async function savePricing() {
+    if (!pricingPid) return;
+    const items = (pricingBase || []).map((it, i) => { const el = document.getElementById('pprice_' + i); const v = el ? el.value : ''; return Object.assign({}, it, { price: (v === '' || v == null) ? '' : Number(v) }); });
+    const pfEl = document.getElementById('ppricefrom'); const priceFrom = pfEl ? pfEl.value : '';
+    try { await db.properties.updatePricing(pricingPid, { items, priceFrom }); toast('Pricing updated'); location.hash = (me() && me().role === 'developer') ? '#/developer' : '#/account'; route(); }
+    catch (e) { toast((e && e.message) || 'Could not update pricing'); }
+  }
   async function enterDealRoom(pid) { const ck = document.getElementById('ndaAck'); if (!ck || !ck.checked) { toast('Please acknowledge the confidentiality terms'); return; }
     try { await db.dealroom.acknowledge(pid, 'v1'); toast('Welcome to the Deal Room'); route(); } catch (e) { toast((e && e.message) || 'Could not open the Deal Room'); } }
   function logDeal(pid, key, event) { try { db.dealroom.log(pid, event, key); } catch (e) {} }
@@ -420,15 +448,16 @@
   function itemRowDevHtml(it, i) { const res = CFG.RESIDENTIAL_TYPES.indexOf(it.type) >= 0, land = CFG.LAND_TYPES.indexOf(it.type) >= 0;
     const typeSel = `<div class="field" style="flex:2;min-width:150px;margin:0"><label class="tiny muted">Property type</label><select onchange="CODEVAPP.itemSetDev(${i},'type',this.value)"><option value="">—</option>${CFG.PROPERTY_TYPES.map(x => `<option ${x === it.type ? 'selected' : ''}>${x}</option>`).join('')}</select></div>`;
     const bedSel = res ? `<div class="field" style="flex:1;min-width:120px;margin:0"><label class="tiny muted">Bedrooms</label><select onchange="CODEVAPP.itemSetDev(${i},'bedrooms',this.value)"><option value="">—</option>${CFG.BEDROOMS.map(x => `<option ${x === it.bedrooms ? 'selected' : ''}>${x}</option>`).join('')}</select></div>` : '';
-    const landF = land ? `<div class="field" style="flex:1;min-width:100px;margin:0"><label class="tiny muted">Size (sqm)</label><input type="number" min="0" value="${esc(it.landSqm || '')}" oninput="CODEVAPP.itemSizeDev(${i},'landSqm',this.value)"></div><div class="field" style="flex:1;min-width:100px;margin:0"><label class="tiny muted">Size (sqft)</label><input type="number" min="0" value="${esc(it.landSqft || '')}" oninput="CODEVAPP.itemSizeDev(${i},'landSqft',this.value)"></div>` : '';
+    const landF = land ? `<div class="field" style="flex:1;min-width:100px;margin:0"><label class="tiny muted">Size (sqm)</label><input type="number" min="0" value="${esc(it.landSqm || '')}" oninput="CODEVAPP.itemSizeDev(${i},'landSqm',this.value)"></div><div class="field" style="flex:1;min-width:100px;margin:0"><label class="tiny muted">Size (sqft)</label><input type="number" min="0" value="${esc(it.landSqft || '')}" oninput="CODEVAPP.itemSizeDev(${i},'landSqft',this.value)"></div><div class="field" style="flex:2;min-width:190px;margin:0"><label class="tiny muted">Coordinates (lat, lng)</label><input type="text" inputmode="decimal" placeholder="e.g. 6.4281, 3.4219" value="${esc(it.coords || '')}" onchange="CODEVAPP.itemCoordsDev(${i},this)"><div class="tiny muted" id="coordHintDev_${i}" style="margin-top:3px">Decimal degrees (WGS-84). Google-Maps links accepted.</div></div>` : '';
     const unitsF = `<div class="field" style="flex:1;min-width:90px;margin:0"><label class="tiny muted">Units</label><input type="number" min="0" step="1" value="${(it.units === 0 || it.units) ? it.units : ''}" onchange="CODEVAPP.itemSetDev(${i},'units',this.value)"></div>`;
     const priceF = `<div class="field" style="flex:1;min-width:120px;margin:0"><label class="tiny muted">Price (₦)</label><input type="number" min="0" value="${(it.price === 0 || it.price) ? it.price : ''}" onchange="CODEVAPP.itemSetDev(${i},'price',this.value)"></div>`;
     return `<div class="card pad" style="background:var(--soft)"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">${typeSel}${bedSel}${landF}${unitsF}${priceF}${listingItems.length > 1 ? `<button type="button" class="btn ghost sm" onclick="CODEVAPP.delItemDev(${i})">✕</button>` : ''}</div></div>`; }
   function itemsDevHtml() { return (listingItems || []).map((it, i) => itemRowDevHtml(it, i)).join(''); }
   function renderItemsDev() { const box = document.getElementById('itemRowsDev'); if (box) box.innerHTML = itemsDevHtml(); }
-  function addItemDev() { listingItems.push({ type: '', bedrooms: '', landSqm: '', landSqft: '', units: '', price: '' }); renderItemsDev(); }
+  function addItemDev() { listingItems.push({ type: '', bedrooms: '', landSqm: '', landSqft: '', coords: '', units: '', price: '' }); renderItemsDev(); }
   function delItemDev(i) { listingItems.splice(i, 1); renderItemsDev(); }
-  function itemSetDev(i, k, v) { listingItems[i][k] = v; if (k === 'type') { listingItems[i].bedrooms = ''; listingItems[i].landSqm = ''; listingItems[i].landSqft = ''; renderItemsDev(); } }
+  function itemSetDev(i, k, v) { listingItems[i][k] = v; if (k === 'type') { listingItems[i].bedrooms = ''; listingItems[i].landSqm = ''; listingItems[i].landSqft = ''; listingItems[i].coords = ''; renderItemsDev(); } }
+  function itemCoordsDev(i, el) { const raw = el.value.trim(); const hint = document.getElementById('coordHintDev_' + i); const c = window.CODEV.parseCoords(raw); if (!raw) { listingItems[i].coords = ''; el.style.borderColor = ''; if (hint) { hint.textContent = 'Decimal degrees (WGS-84). Google-Maps links accepted.'; hint.style.color = ''; } return; } if (c) { const norm = c.lat + ', ' + c.lng; listingItems[i].coords = norm; el.value = norm; el.style.borderColor = 'var(--green)'; if (hint) { hint.textContent = '✓ ' + norm; hint.style.color = 'var(--green)'; } } else { listingItems[i].coords = raw; el.style.borderColor = 'var(--red)'; if (hint) { hint.textContent = '✗ Not a valid coordinate — use e.g. 6.4281, 3.4219'; hint.style.color = 'var(--red)'; } } }
   function itemSizeDev(i, k, v) { listingItems[i][k] = v; const A = 10.7639; const other = k === 'landSqm' ? 'landSqft' : 'landSqm'; listingItems[i][other] = v ? String(Math.round(k === 'landSqm' ? Number(v) * A : Number(v) / A)) : ''; const el = document.querySelector(`#itemRowsDev .card:nth-child(${i + 1}) input[oninput*="'${other}'"]`); if (el) el.value = listingItems[i][other]; }
   // ---- Assurance documents staged during listing creation (uploaded after the listing is created) ----
   let listingDocs = {};
@@ -765,6 +794,7 @@
             try { txs = await db.transactions.listMineForProperty(p.id); } catch {} try { await db.dealroom.log(p.id, 'opened', null); } catch {} } }
         app.innerHTML = V.dealRoom(u, p, { verified, access, docs, report, txs }); }
       else if (path === 'how') app.innerHTML = V.how();
+      else if (path === 'pricing') { const p = await db.properties.byId(arg); app.innerHTML = V.pricing(u, p); }
       else if (path === 'list') app.innerHTML = V.list(u, await db.properties.listMine());
       else if (path === 'investor') app.innerHTML = V.investor(u, await db.properties.listPublic());
       else if (path === 'developer') app.innerHTML = V.developer(u, await db.properties.listMine());
@@ -776,7 +806,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, stageDoc, enterDealRoom, logDeal, onTypeChange, addItemDev, delItemDev, itemSetDev, itemSizeDev, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, addDevDoc, viewDevDoc, addExtra, delExtra, extraSet, addExtraFile, devTxUnit, devTxAddPay, devTxPaySet, devTxDelPay, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, stageDoc, enterDealRoom, logDeal, onTypeChange, addItemDev, delItemDev, itemSetDev, itemSizeDev, itemCoordsDev, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, addDevDoc, viewDevDoc, addExtra, delExtra, extraSet, addExtraFile, devTxUnit, devTxAddPay, devTxPaySet, devTxDelPay, savePricing, _afterAuth: null };
   // Session timeout → clean logout + re-login prompt (fired by the data layer on an expired JWT).
   window.addEventListener('codev:session-expired', () => {
     renderAuthArea();
