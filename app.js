@@ -198,7 +198,10 @@
 
   // ---- pieces ----
   function coverBg(p) { return (p.images && p.images[0]) ? `background-image:url('${p.images[0]}');background-size:cover;background-position:center;` : ''; }
-  function oppCard(p) { return `<div class="card opp-card">
+  function oppCard(p) {
+    const mc = (p.items || []).map(it => it && it.coords).find(c => window.CODEV.mapUrl(c));
+    const mu = mc ? window.CODEV.mapUrl(mc) : '';
+    return `<div class="card opp-card">
     <div class="ph"${p.images && p.images[0] ? ' data-cover="1"' : ''} style="${coverBg(p)}"><span class="vb badge verified">✓ Verified</span><span class="loc">📍 ${esc(p.location)}</span></div>
     <div style="padding:16px"><div class="small muted" style="font-weight:600">${esc(p.developer)}</div>
       <h3 style="margin:2px 0 6px;font-size:19px">${esc(p.title)}</h3>
@@ -206,6 +209,7 @@
       ${cardTypeHtml(p)}
       ${legalVerified(p) ? `<div style="margin:0 0 7px">${legalBadgeHtml(p)}</div>` : ''}
       <p class="small muted" style="min-height:38px">${esc(p.summary)}</p>
+      ${mu ? `<a class="tiny" href="${mu}" target="_blank" rel="noopener" style="display:inline-block;margin:0 0 4px;color:var(--bronze);font-weight:600">📍 ${esc(window.CODEV.coordsLabel(mc))} — view on map</a>` : ''}
       ${fundingBar(p)}
       <div class="spread" style="border-top:1px solid var(--line);padding-top:11px;margin-top:10px">
         <div><div class="tiny muted">Participation from</div><div class="serif" style="color:var(--bronze);font-size:17px">${fmtN(p.priceFrom)}</div></div>
@@ -400,7 +404,7 @@
     },
   };
   function listCards(mine) { if (!mine || !mine.length) return `<div class="card pad small muted">No submissions yet. <a href="#/list">List a property →</a></div>`;
-    return `<div class="grid" style="gap:10px">${mine.map(p => `<div class="card pad"><div class="spread"><div class="row" style="gap:11px;align-items:center">${p.images && p.images[0] ? `<img src="${p.images[0]}" alt="" style="width:48px;height:48px;border-radius:9px;object-fit:cover;flex:none">` : ''}<div><b>${esc(p.title)}</b>${p.ref ? ` <span class="tiny" style="font-family:monospace;color:var(--ink2)">${esc(p.ref)}</span>` : ''}<div class="tiny muted">${esc(p.location)} · ${fmtN(p.priceFrom)} · funded ${funded(p)}%</div></div></div><span class="badge ${p.status}">${p.status}</span></div>
+    return `<div class="grid" style="gap:10px">${mine.map(p => `<div class="card pad"><div class="spread"><div class="row" style="gap:11px;align-items:center">${p.images && p.images[0] ? `<img src="${p.images[0]}" alt="" style="width:48px;height:48px;border-radius:9px;object-fit:cover;flex:none">` : ''}<div><b>${esc(p.title)}</b>${p.ref ? ` <span class="tiny" style="font-family:monospace;color:var(--ink2)">${esc(p.ref)}</span>` : ''}<div class="tiny muted">${esc(p.location)} · ${fmtN(p.priceFrom)} · funded ${funded(p)}%</div>${(function(){ const mc=(p.items||[]).map(it=>it&&it.coords).find(c=>window.CODEV.mapUrl(c)); const mu=mc?window.CODEV.mapUrl(mc):''; return mu?`<a class="tiny" href="${mu}" target="_blank" rel="noopener" style="color:var(--bronze);font-weight:600">📍 ${esc(window.CODEV.coordsLabel(mc))} — map</a>`:''; })()}</div></div><span class="badge ${p.status}">${p.status}</span></div>
       <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><a class="btn sm" href="#/pricing/${p.id}">💲 Update pricing</a><a class="btn primary sm" href="#/docs/${p.id}">📤 Upload / manage documents</a><a class="btn sm" href="#/deals/${p.id}">💳 Deals &amp; payment calls</a></div></div>`).join('')}</div>`; }
   function docRowDev(pid, r) { const d = r.doc || {}; const st = d.status || 'awaiting';
     return `<div class="card pad">
