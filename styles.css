@@ -47,6 +47,9 @@ img{max-width:100%;}
 .badge.verified{background:#e3f1ea;color:var(--green);}
 .badge.pending{background:#f6edda;color:var(--amber);}
 .badge.rejected{background:#f6e3df;color:var(--red);}
+.badge.sold{background:#b3402f;color:#fff;}
+.opp-card.is-sold .ph{filter:grayscale(.3)}
+.opp-card .ph .soldtag{position:absolute;left:10px;top:10px;z-index:3;background:#b3402f;color:#fff;font-weight:800;font-size:12px;letter-spacing:.08em;padding:4px 11px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.25)}
 .badge.role{background:#e7edf2;color:var(--navy2);text-transform:none;letter-spacing:0;font-weight:600;}
 .badge.legalv{background:#eef2f7;color:var(--navy);border:1px solid #cfdae6;text-transform:none;letter-spacing:0;font-weight:700;cursor:pointer;}
 .badge.legalv:hover{background:#e4ebf3;border-color:var(--bronze);}

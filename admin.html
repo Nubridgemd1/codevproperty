@@ -11,7 +11,7 @@
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=23" />
+<link rel="stylesheet" href="styles.css?v=24" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -50,7 +50,7 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=23"></script>
+<script src="data.js?v=24"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
@@ -336,10 +336,11 @@
       <td>${esc(p.developer||'')}<div class="tiny muted">${esc(p.submittedBy||'')} · <span class="badge role">${p.submittedByRole||'—'}</span></div></td>
       <td>${p.assignedTo?`<span class="badge" style="background:#e6f5ec;color:#1f7a4d;border-color:#cfe6da">✓ ${esc(p.assignedTo)}</span>`:'<span class="tiny muted">—</span>'}</td>
       <td>${fmtN(p.priceFrom)}<div class="tiny muted">${esc(p.stage||'')}</div></td>
-      <td><span class="badge ${p.status}">${p.status}</span></td>
+      <td><span class="badge ${p.status}">${p.status}</span>${p.sold?' <span class="badge sold">SOLD</span>':''}</td>
       <td style="white-space:nowrap;text-align:right">${canL?`
         ${p.status!=='verified'?`<button class="btn sm" style="color:var(--green);border-color:#cfe6da" onclick="ADMIN.setStatus('${p.id}','verified')">✓ Verify</button>`:''}
         ${p.status!=='rejected'?`<button class="btn sm danger" onclick="ADMIN.setStatus('${p.id}','rejected')">Reject</button>`:''}
+        <button class="btn sm" onclick="ADMIN.setSold('${p.id}',${p.sold?'false':'true'})">${p.sold?'↩ Mark available':'🏷 Mark sold'}</button>
         <button class="btn sm navy" onclick="ADMIN.editProp('${p.id}')">Edit · milestones</button>
         <button class="btn ghost sm" onclick="ADMIN.delProp('${p.id}')">🗑</button>`:'<span class="tiny muted">View only</span>'}</td></tr>`).join('')
       || `<tr><td colspan="6" class="center muted" style="padding:24px">No properties match your filter.</td></tr>`;
@@ -368,6 +369,7 @@
     const patch={ status:s, verifiedAt: s==='verified'?window.CODEV.now():null };
     if(s==='verified' && !p.ref) patch.ref=window.CODEV.makeListingRef(); // assign the permanent listing reference once, on publish
     try{ await db.properties.update(id,patch); toast('Listing '+(s==='verified'?('verified & published · '+(patch.ref||p.ref||'')):s)); await load(); }catch(err){toast(err.message);} }
+  async function setSold(id,val){ const sold=(val===true||val==='true'); try{ await db.properties.update(id,{sold}); toast(sold?'Marked SOLD':'Marked available'); await load(); }catch(err){toast(err.message);} }
   function copyRef(v){ try{ navigator.clipboard.writeText(v); toast('Copied '+v); }catch{ toast('Copy not available'); } }
   function onTypeChange(sel){ const f=document.getElementById('bedroomsField'); if(f) f.style.display=window.CODEV.isResidential(sel.value)?'':'none'; }
   async function delProp(id){ const p=PROPS.find(x=>x.id===id); if(confirm('Delete "'+p.title+'"?')){ try{ await db.properties.remove(id); toast('Listing deleted'); await load(); }catch(err){toast(err.message);} } }
@@ -661,7 +663,7 @@
     $('#modal').classList.add('show'); }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,copyRef,onTypeChange,addItem,delItem,itemSet,itemSize,reviewDoc,uploadDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,txSetUnit,txAddPay,txPaySet,txDelPay,admAccess,delProp,editProp,saveProp,newProp,createProp,itemCoords,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,viewDev,openDevFile,openDevExtra,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+  window.ADMIN={login,lock,tab,setStatus,setSold,copyRef,onTypeChange,addItem,delItem,itemSet,itemSize,reviewDoc,uploadDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,txSetUnit,txAddPay,txPaySet,txDelPay,admAccess,delProp,editProp,saveProp,newProp,createProp,itemCoords,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,viewDev,openDevFile,openDevExtra,closeModal,forgot,backToLogin,forgotSend,forgotReset,
     addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps};
 
   // Session timeout in the admin console → message, then back to the sign-in gate.

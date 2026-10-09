@@ -201,8 +201,8 @@
   function oppCard(p) {
     const mc = (p.items || []).map(it => it && it.coords).find(c => window.CODEV.mapUrl(c));
     const mu = mc ? window.CODEV.mapUrl(mc) : '';
-    return `<div class="card opp-card">
-    <div class="ph"${p.images && p.images[0] ? ' data-cover="1"' : ''} style="${coverBg(p)}"><span class="vb badge verified">✓ Verified</span><span class="loc">📍 ${esc(p.location)}</span></div>
+    return `<div class="card opp-card${p.sold ? ' is-sold' : ''}">
+    <div class="ph"${p.images && p.images[0] ? ' data-cover="1"' : ''} style="${coverBg(p)}">${p.sold ? '<span class="soldtag">SOLD</span>' : '<span class="vb badge verified">✓ Verified</span>'}<span class="loc">📍 ${esc(p.location)}</span></div>
     <div style="padding:16px"><div class="small muted" style="font-weight:600">${esc(p.developer)}</div>
       <h3 style="margin:2px 0 6px;font-size:19px">${esc(p.title)}</h3>
       ${p.ref ? `<div class="tiny" style="font-family:monospace;color:var(--ink2);margin:0 0 4px">${esc(p.ref)}</div>` : ''}
@@ -272,7 +272,7 @@
               ${ms.map(m => `<tr><td>${esc(m.name)}</td><td>${m.pct}%</td><td class="tiny muted">${esc(m.targetDate || '—')}</td></tr>`).join('') || `<tr><td colspan="3" class="muted tiny">No schedule set.</td></tr>`}
               </tbody></table>
               <p class="tiny muted" style="margin-top:8px">Planned construction phasing. Payment schedules are agreed per buyer when a reservation or sale is created.</p></div></div>
-          <div><span class="badge verified">✓ Verified</span> ${legalBadgeHtml(p)}<h1 style="font-size:30px;margin:10px 0 4px">${esc(p.title)}</h1>
+          <div>${p.sold ? '<span class="badge sold">SOLD</span> ' : ''}<span class="badge verified">✓ Verified</span> ${legalBadgeHtml(p)}<h1 style="font-size:30px;margin:10px 0 4px">${esc(p.title)}</h1>
             ${p.ref ? `<div class="tiny" style="font-family:monospace;color:var(--ink2);margin:0 0 4px">Ref: <b style="color:var(--navy)">${esc(p.ref)}</b></div>` : ''}
             <div class="muted">${esc(p.developer)} · 📍 ${esc(p.location)}</div>
             ${p.address ? `<div class="tiny muted" style="margin-top:3px">🏠 ${esc(p.address)}</div>` : ''}
@@ -290,8 +290,10 @@
               <table style="font-size:13px;width:100%"><tbody>${mergeReqDocs(dstat || [], 'doc_key').map(r => { const st = (r.doc && r.doc.status) || 'awaiting'; return `<tr><td>${esc(r.label)}</td><td style="text-align:right;white-space:nowrap">${docStatusBadge(st)}</td></tr>`; }).join('')}</tbody></table>
               <div class="tiny muted" style="margin-top:8px">Key project documents are reviewed by CoDev's legal partner. Underlying documents can be requested during investor qualification.</div>
               ${(function(){ const u = me(); return (u && p.submittedBy && u.email && String(p.submittedBy).toLowerCase() === String(u.email).toLowerCase()) ? `<a class="btn primary sm" style="margin-top:10px" href="#/docs/${p.id}">📤 Upload / manage assurance documents</a>` : ''; })()}</div>
-            <div class="row" style="gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn primary" onclick="CODEVAPP.express('${p.id}')">I'm Interested — start qualification</button><a class="btn" href="#/dealroom/${p.id}">🔐 Deal Room</a></div>
-            <p class="tiny muted" style="margin-top:8px">Complete a short investor qualification. CoDev verifies applicants before granting Deal Room access to confidential project documents.</p></div></div></section>`; },
+            ${p.sold
+              ? `<div class="card pad" style="margin-top:16px;border:1px solid #e7c9c3;background:#fbf0ee"><b style="color:#b3402f">SOLD</b> — this development has been sold and is no longer accepting new interest.</div>`
+              : `<div class="row" style="gap:8px;margin-top:16px;flex-wrap:wrap"><button class="btn primary" onclick="CODEVAPP.express('${p.id}')">I'm Interested — start qualification</button><a class="btn" href="#/dealroom/${p.id}">🔐 Deal Room</a></div>
+            <p class="tiny muted" style="margin-top:8px">Complete a short investor qualification. CoDev verifies applicants before granting Deal Room access to confidential project documents.</p>`}</div></div></section>`; },
     how() { const steps = [['List', 'A developer or property owner submits a development or plot.'], ['Verify', 'Admin reviews and verifies the listing before it goes public.'], ['Co-develop', 'Investors browse verified opportunities and express interest.'], ['Govern', 'Milestone-based structure with timelines & payments; funds are released through licensed escrow partners against verified construction milestones.']];
       return sec('How it works', 'From listing to verification to co-development.', `<div class="grid g2">${steps.map((s, i) => `<div class="card pad row" style="gap:14px;align-items:flex-start"><span class="step-n">${i + 1}</span><div><h3 style="margin:0 0 4px;font-size:18px">${s[0]}</h3><p class="small muted" style="margin:0">${s[1]}</p></div></div>`).join('')}</div>`); },
     list(u, mine) { listingPhotos = []; listingItems = [{ type: '', bedrooms: '', landSqm: '', landSqft: '', coords: '', units: '', price: '' }]; listingDocs = {};
@@ -404,7 +406,7 @@
     },
   };
   function listCards(mine) { if (!mine || !mine.length) return `<div class="card pad small muted">No submissions yet. <a href="#/list">List a property →</a></div>`;
-    return `<div class="grid" style="gap:10px">${mine.map(p => `<div class="card pad"><div class="spread"><div class="row" style="gap:11px;align-items:center">${p.images && p.images[0] ? `<img src="${p.images[0]}" alt="" style="width:48px;height:48px;border-radius:9px;object-fit:cover;flex:none">` : ''}<div><b>${esc(p.title)}</b>${p.ref ? ` <span class="tiny" style="font-family:monospace;color:var(--ink2)">${esc(p.ref)}</span>` : ''}<div class="tiny muted">${esc(p.location)} · ${fmtN(p.priceFrom)} · funded ${funded(p)}%</div>${(function(){ const mc=(p.items||[]).map(it=>it&&it.coords).find(c=>window.CODEV.mapUrl(c)); const mu=mc?window.CODEV.mapUrl(mc):''; return mu?`<a class="tiny" href="${mu}" target="_blank" rel="noopener" style="color:var(--bronze);font-weight:600">📍 ${esc(window.CODEV.coordsLabel(mc))} — map</a>`:''; })()}</div></div><span class="badge ${p.status}">${p.status}</span></div>
+    return `<div class="grid" style="gap:10px">${mine.map(p => `<div class="card pad"><div class="spread"><div class="row" style="gap:11px;align-items:center">${p.images && p.images[0] ? `<img src="${p.images[0]}" alt="" style="width:48px;height:48px;border-radius:9px;object-fit:cover;flex:none">` : ''}<div><b>${esc(p.title)}</b>${p.ref ? ` <span class="tiny" style="font-family:monospace;color:var(--ink2)">${esc(p.ref)}</span>` : ''}<div class="tiny muted">${esc(p.location)} · ${fmtN(p.priceFrom)} · funded ${funded(p)}%</div>${(function(){ const mc=(p.items||[]).map(it=>it&&it.coords).find(c=>window.CODEV.mapUrl(c)); const mu=mc?window.CODEV.mapUrl(mc):''; return mu?`<a class="tiny" href="${mu}" target="_blank" rel="noopener" style="color:var(--bronze);font-weight:600">📍 ${esc(window.CODEV.coordsLabel(mc))} — map</a>`:''; })()}</div></div><div style="text-align:right"><span class="badge ${p.status}">${p.status}</span>${p.sold ? ' <span class="badge sold">SOLD</span>' : ''}</div></div>
       <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><a class="btn sm" href="#/pricing/${p.id}">💲 Update pricing</a><a class="btn primary sm" href="#/docs/${p.id}">📤 Upload / manage documents</a><a class="btn sm" href="#/deals/${p.id}">💳 Deals &amp; payment calls</a></div></div>`).join('')}</div>`; }
   function docRowDev(pid, r) { const d = r.doc || {}; const st = d.status || 'awaiting';
     return `<div class="card pad">

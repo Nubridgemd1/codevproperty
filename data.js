@@ -124,6 +124,7 @@ window.CODEV = (function () {
     items: Array.isArray(r.property_items) ? r.property_items : [],
     units: (r.units === 0 || r.units) ? r.units : '', deliveryDate: r.delivery_date || '',
     summary: r.summary, priceFrom: r.price_from, stage: r.stage, status: r.status,
+    sold: !!r.sold, soldAt: r.sold_at || null,
     legalStatus: r.legal_status || 'not_submitted', legalReviewedAt: r.legal_reviewed_at || null,
     submittedBy: r.submitted_by_email, submittedByRole: r.submitted_by_role, createdAt: r.created_at, verifiedAt: r.verified_at,
     assignedTo: r.assigned_to_email || '', assignedToId: r.assigned_to || '', assignedBy: r.assigned_by || '', assignedAt: r.assigned_at || null,
@@ -242,6 +243,7 @@ window.CODEV = (function () {
         if ('bedrooms' in patch) { row.bedrooms = patch.bedrooms || null; newKeys.push('bedrooms'); }
         if ('price' in patch) { row.price = (patch.price === '' || patch.price == null) ? null : Number(patch.price); newKeys.push('price'); }
         if ('items' in patch) { row.property_items = Array.isArray(patch.items) ? patch.items : []; newKeys.push('property_items'); }
+        if ('sold' in patch) { row.sold = !!patch.sold; row.sold_at = patch.sold ? nowISO() : null; newKeys.push('sold', 'sold_at'); }
         if ('units' in patch) { row.units = (patch.units === '' || patch.units == null) ? null : Number(patch.units); newKeys.push('units'); }
         if ('deliveryDate' in patch) { row.delivery_date = patch.deliveryDate || null; newKeys.push('delivery_date'); }
         if ('legalStatus' in patch) { row.legal_status = patch.legalStatus; row.legal_reviewed_at = ['cleared','conditionally_cleared'].indexOf(patch.legalStatus)>=0 ? nowISO() : null; }
