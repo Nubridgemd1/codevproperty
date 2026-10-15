@@ -11,7 +11,7 @@
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=28" />
+<link rel="stylesheet" href="styles.css?v=29" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -50,7 +50,7 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=28"></script>
+<script src="data.js?v=29"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
@@ -188,7 +188,12 @@
         <div><div class="tiny muted">Capacity</div>${esc(q.capacity_range||'—')}</div>
         <div><div class="tiny muted">Funding</div>${esc(q.funding_method||'—')}${q.mortgage_required?' · mortgage required':''}</div>
         <div><div class="tiny muted">Source of funds</div>${esc(q.source_of_funds||'—')}</div>
+        ${q.phone?`<div><div class="tiny muted">Phone</div>${esc(q.phone)}</div>`:''}
+        ${q.country?`<div><div class="tiny muted">Country</div>${esc(q.country)}</div>`:''}
+        ${q.interest?`<div><div class="tiny muted">Interest</div>${esc(q.interest)}</div>`:''}
+        ${q.preferred_location?`<div><div class="tiny muted">Preferred location</div>${esc(q.preferred_location)}</div>`:''}
         <div><div class="tiny muted">Declaration</div>${q.declaration?'✓ Accepted':'—'}</div></div>
+      ${q.comments?`<div style="margin-top:10px"><div class="tiny muted">Comments</div><div class="small" style="white-space:pre-wrap">${esc(q.comments)}</div></div>`:''}
       <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
       <div class="row" style="gap:12px">
         <div class="field" style="flex:1;min-width:130px"><label>Identity</label>${sel('qId',q.gate_identity||'pending',[['pending','Pending'],['passed','Passed'],['review','Review'],['failed','Failed']])}</div>

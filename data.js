@@ -268,6 +268,9 @@ window.CODEV = (function () {
       async listAll() { return (await sb('/rest/v1/profiles?order=created_at.desc&select=*')).map(toAcc); },
       async byId(id) { return fetchProfile(id); },
       async add({ name, email, role, password }) {
+        // Pre-approve this email so the (optional) invitation-only signup gate allows the
+        // admin-created account. Best-effort: silently ignored if SIGNUP-GATE.sql isn't installed.
+        try { await sb('/rest/v1/rpc/admin_preapprove_signup', { method: 'POST', body: { e: email, nm: name || null, k: (role === 'developer' ? 'developer' : 'buyer') } }); } catch (e) {}
         // Admin creates a real account via signup (does not change the admin's own session).
         return sb('/auth/v1/signup', { method: 'POST', anon: true, body: { email, password, data: { name, role } } });
       },
@@ -307,13 +310,19 @@ window.CODEV = (function () {
     // Investor / buyer qualification records (Express Interest → qualification → CoDev verification).
     qualifications: {
       async add(q) { const s = getSession();
-        const row = { property_id: q.propertyId, property_title: q.propertyTitle || null, developer: q.developer || null,
+        const base = { property_id: q.propertyId, property_title: q.propertyTitle || null, developer: q.developer || null,
           user_id: s.user.id, user_email: s.user.email, user_name: (s.profile && s.profile.name) || s.user.email,
           investor_type: q.investorType, unit_type: q.unitType || null, amount_band: q.amountBand, currency: q.currency,
           objective: q.objective, readiness: q.readiness, funding_method: q.fundingMethod, capacity_range: q.capacityRange,
           mortgage_required: !!q.mortgageRequired, source_of_funds: q.sourceOfFunds, declaration: !!q.declaration,
           status: 'qualification_in_progress' };
-        return sb('/rest/v1/qualifications', { method: 'POST', body: row, prefer: 'return=representation' }); },
+        // Enriched buyer fields — saved when the columns exist (QUALIFICATION-ENRICH.sql), otherwise
+        // the insert retries without them so the qualification always saves (zero disruption).
+        const extra = { phone: q.phone || null, country: q.country || null, interest: q.interest || null,
+          preferred_location: q.preferredLocation || null, comments: q.comments || null };
+        try { return await sb('/rest/v1/qualifications', { method: 'POST', body: Object.assign({}, base, extra), prefer: 'return=representation' }); }
+        catch (e) { const m = (e && e.message) || ''; if (!/phone|country|interest|preferred_location|comments|column|schema cache/i.test(m)) throw e;
+          return sb('/rest/v1/qualifications', { method: 'POST', body: base, prefer: 'return=representation' }); } },
       async listMine() { const s = getSession(); if (!s) return []; return sb('/rest/v1/qualifications?user_id=eq.' + s.user.id + '&order=created_at.desc&select=*'); },
       async listAll() { return sb('/rest/v1/qualifications?order=created_at.desc&select=*'); },
       async update(id, patch) { return sb('/rest/v1/qualifications?id=eq.' + id, { method: 'PATCH', body: patch, prefer: 'return=representation' }); },
@@ -484,7 +493,8 @@ window.CODEV = (function () {
         const r = { id: uid(), created_at: nowISO(), status: 'qualification_in_progress', user_id: s && s.id, user_email: s && s.email, user_name: s && s.name,
           property_id: q.propertyId, property_title: q.propertyTitle, developer: q.developer, investor_type: q.investorType, unit_type: q.unitType,
           amount_band: q.amountBand, currency: q.currency, objective: q.objective, readiness: q.readiness, funding_method: q.fundingMethod,
-          capacity_range: q.capacityRange, mortgage_required: !!q.mortgageRequired, source_of_funds: q.sourceOfFunds, declaration: !!q.declaration };
+          capacity_range: q.capacityRange, mortgage_required: !!q.mortgageRequired, source_of_funds: q.sourceOfFunds, declaration: !!q.declaration,
+          phone: q.phone || '', country: q.country || '', interest: q.interest || '', preferred_location: q.preferredLocation || '', comments: q.comments || '' };
         list.unshift(r); wr('codev_qualifications', list); return r; },
       async listMine() { const s = rd(L.sess, null); return s ? rd('codev_qualifications', []).filter(q => q.user_id === s.id) : []; },
       async listAll() { return rd('codev_qualifications', []); },

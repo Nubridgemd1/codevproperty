@@ -636,12 +636,15 @@
       <form onsubmit="return CODEVAPP.submitQualify(event)">
         <div class="field"><label>Investor type</label>${sel('investorType', INVESTOR_TYPES, 'required')}</div>
         <div class="field"><label>Interested unit / property type <span class="tiny muted">(optional)</span></label><input name="unitType" placeholder="e.g. 3-bed apartment, whole floor, SPV participation…"></div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Phone / WhatsApp</label><input name="phone"></div><div class="field" style="flex:1;min-width:120px"><label>Country of residence</label><input name="country"></div></div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Interest</label>${sel('interest', ['Buy Property', 'Co-Develop', 'Explore Opportunities'])}</div><div class="field" style="flex:1;min-width:120px"><label>Preferred location <span class="tiny muted">(optional)</span></label><input name="preferredLocation" placeholder="e.g. Lekki, Ikoyi…"></div></div>
         <div class="row" style="gap:10px"><div class="field" style="flex:2;min-width:150px"><label>Investment / purchase amount</label><select name="amountBand" id="qAmount" required>${amtOpts}</select></div><div class="field" style="flex:1;min-width:90px"><label>Currency</label><select name="currency" id="qCurrency" onchange="CODEVAPP.qCurrency(this.value)">${optionList(CURRENCIES)}</select></div></div>
         <div class="field"><label>Investment objective</label>${sel('objective', OBJECTIVES, 'required')}</div>
         <div class="field"><label>Investment readiness</label>${sel('readiness', READINESS, 'required')}</div>
         <div class="field"><label>Funding method</label>${sel('fundingMethod', FUNDING_METHODS, 'required')}</div>
         <div class="row" style="gap:10px"><div class="field" style="flex:2;min-width:150px"><label>Available investment capacity</label><select name="capacityRange" id="qCapacity" required>${amtOpts}</select></div><div class="field" style="flex:1;min-width:90px"><label>Mortgage?</label>${sel('mortgageRequired', ['No', 'Yes'])}</div></div>
         <div class="field"><label>Principal source of funds</label>${sel('sourceOfFunds', SOURCE_OF_FUNDS, 'required')}</div>
+        <div class="field"><label>Additional comments <span class="tiny muted">(optional)</span></label><textarea name="comments" rows="2"></textarea></div>
         <div style="display:flex;gap:8px;align-items:flex-start;margin:6px 0 12px;font-size:11.5px;color:var(--ink2)"><input type="checkbox" name="declaration" id="qDecl" required style="margin-top:2px"><label for="qDecl" style="font-weight:normal;text-transform:none;letter-spacing:0;margin:0">I confirm this information is accurate; I understand co-development involves construction and timeline risk and that returns are not guaranteed; I may require independent legal, tax or financial advice; and I consent to CoDev's identity and compliance checks and to relevant information being shared with project parties under applicable confidentiality and data-protection terms.</label></div>
         <button class="btn primary" style="width:100%" id="qBtn">Submit qualification</button>
         <p class="tiny muted center" style="margin-top:8px">CoDev verification is required before Deal Room access. This is not investment, legal or tax advice.</p>
@@ -653,7 +656,10 @@
     const q = { propertyId: CODEVAPP._q.id, propertyTitle: CODEVAPP._q.title, developer: CODEVAPP._q.dev,
       investorType: f.investorType.value, unitType: f.unitType.value.trim(), amountBand: f.amountBand.value, currency: f.currency.value,
       objective: f.objective.value, readiness: f.readiness.value, fundingMethod: f.fundingMethod.value, capacityRange: f.capacityRange.value,
-      mortgageRequired: f.mortgageRequired.value === 'Yes', sourceOfFunds: f.sourceOfFunds.value, declaration: true };
+      mortgageRequired: f.mortgageRequired.value === 'Yes', sourceOfFunds: f.sourceOfFunds.value, declaration: true,
+      phone: (f.phone && f.phone.value.trim()) || '', country: (f.country && f.country.value.trim()) || '',
+      interest: (f.interest && f.interest.value) || '', preferredLocation: (f.preferredLocation && f.preferredLocation.value.trim()) || '',
+      comments: (f.comments && f.comments.value.trim()) || '' };
     try { await db.qualifications.add(q); closeAuth(); toast('Qualification submitted — CoDev will review and verify, then unlock Deal Room access.'); }
     catch (err) { const m = (err && err.message) || '';
       if (/qualification|relation|does not exist|not found|\(40[34]\)|42P01|schema cache/i.test(m)) { closeAuth(); toast('Qualification received — CoDev will review and verify.'); }
