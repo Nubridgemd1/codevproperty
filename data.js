@@ -327,8 +327,9 @@ window.CODEV = (function () {
           full_name: a.fullName || null, email: a.email || null, phone: a.phone || null,
           company: a.company || null, country: a.country || null,
           details: a.details || {}, consent: !!a.consent };
-        // anon insert: the applicant has no account yet.
-        return sb('/rest/v1/eoi_applications', { method: 'POST', anon: true, body: row, prefer: 'return=representation' });
+        // anon insert: the applicant has no account yet. Use return=minimal — anon has no SELECT
+        // policy, so a representation read-back would be rejected by RLS (and we don't need the row).
+        return sb('/rest/v1/eoi_applications', { method: 'POST', anon: true, body: row, prefer: 'return=minimal' });
       },
       async listAll() { return sb('/rest/v1/eoi_applications?order=created_at.desc&select=*'); },
       async update(id, patch) { const s = getSession(); const body = Object.assign({}, patch);
