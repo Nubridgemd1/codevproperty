@@ -11,7 +11,7 @@
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=26" />
+<link rel="stylesheet" href="styles.css?v=27" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -50,7 +50,7 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=26"></script>
+<script src="data.js?v=27"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
@@ -143,11 +143,13 @@
     if(isFullAdmin()){ tabs.push(['properties','Developments']); }
     if(canLegal()){ tabs.push(['legal','Legal review']); }
     if(isFullAdmin()){ tabs.push(['investors','Investors'],['accounts','Accounts']); if(can('manage_admins')) tabs.push(['admins','Admins &amp; roles']); }
+    if(can('verify_accounts')) tabs.push(['applications','Applications']);
     if(!tabs.length) tabs.push(['legal','Legal review']);
     if(!tabs.some(x=>x[0]===curTab)) curTab=tabs[0][0];
     const bar=document.querySelector('.tabs'); if(bar) bar.innerHTML=tabs.map(t=>`<button class="tab ${t[0]===curTab?'active':''}" data-t="${t[0]}" onclick="ADMIN.tab('${t[0]}')">${t[1]}</button>`).join(''); }
   function tab(t){ curTab=t; renderTabs();
     if(t==='investors'){ $('#panel').innerHTML='<div class="card pad muted">Loading investor pipeline…</div>'; loadInvestors(); return; }
+    if(t==='applications'){ $('#panel').innerHTML='<div class="card pad muted">Loading applications…</div>'; loadApplications(); return; }
     if(t==='legal'){ loadLegal(); return; }
     $('#panel').innerHTML = t==='admins'?adminsPanel():(t==='accounts'?accountsPanel():propertiesPanel()); }
 
@@ -201,6 +203,61 @@
     const patch={ gate_identity:$('#qId').value, gate_kyc:$('#qKyc').value, status:$('#qStatus').value };
     if(patch.status==='codev_verified'){ patch.verified_at=window.CODEV.now(); patch.verified_by=(myProfile()||{}).email||''; }
     try{ await db.qualifications.update(id,patch); closeModal(); toast('Qualification updated'); await loadInvestors(); }
+    catch(err){ toast(err.message||'Save failed'); } }
+
+  // ---------- APPLICATIONS (Expression of Interest → review → approve / invite) ----------
+  let EOIS=[], EOIFILTER='all', EOIEDIT=null;
+  const EOISTAT={ new:['New','pending'], under_review:['Under Review','pending'], info_requested:['Info Requested','pending'], approved:['Approved','verified'], declined:['Declined','rejected'], invited:['Invited','verified'], activated:['Activated','verified'] };
+  const eLabel=(s)=>(EOISTAT[s]||[s||'—','role'])[0]; const eCls=(s)=>(EOISTAT[s]||['','role'])[1];
+  async function loadApplications(){ try{ EOIS=await db.eoi.listAll(); }
+    catch(e){ if(/eoi_applications|relation|does not exist|not found|42P01|schema cache|\(40[0-4]\)|permission/i.test((e&&e.message)||'')){ $('#panel').innerHTML='<div class="card pad"><b>Applications need a one-time backend setup.</b><p class="small muted" style="margin:8px 0 0">Run <code>EOI-APPLICATIONS.sql</code> in the Supabase SQL editor, then reload this page.</p></div>'; return; } EOIS=[]; }
+    $('#panel').innerHTML=applicationsPanel(); }
+  function applicationsPanel(){
+    const list = EOIFILTER==='all'?EOIS:EOIS.filter(x=>x.kind===EOIFILTER);
+    const n=EOIS.length, dev=EOIS.filter(x=>x.kind==='developer').length, buy=EOIS.filter(x=>x.kind==='buyer').length, pend=EOIS.filter(x=>['new','under_review','info_requested'].includes(x.status)).length;
+    const mx=[['Total applications',n],['Developers',dev],['Buyers',buy],['Awaiting review',pend]];
+    const fbtn=(k,l)=>`<button class="tab ${EOIFILTER===k?'active':''}" onclick="ADMIN.eoiFilter('${k}')">${l}</button>`;
+    const rows=list.map(a=>`<tr>
+      <td><b>${esc(a.full_name||'—')}</b><div class="tiny muted">${esc(a.email||'')}</div><div class="tiny muted">${esc(a.phone||'')}</div></td>
+      <td><span class="badge role">${a.kind==='developer'?'Developer':'Buyer'}</span><div class="tiny muted" style="margin-top:3px">${esc(a.company||a.country||'')}</div></td>
+      <td class="tiny muted">${esc(a.ref||'')}<div>${esc(String(a.created_at||'').slice(0,10))}</div></td>
+      <td><span class="badge ${eCls(a.status)}">${esc(eLabel(a.status))}</span></td>
+      <td style="text-align:right"><button class="btn sm navy" onclick="ADMIN.reviewEoi('${a.id}')">Review</button></td></tr>`).join('');
+    return `<div class="card pad" style="margin-bottom:16px"><div class="grid g4">${mx.map(m=>`<div class="stat"><div class="n">${m[1]}</div><div class="l">${m[0]}</div></div>`).join('')}</div>
+      <p class="tiny muted" style="margin:12px 0 0">Expressions of interest are captured <b>before</b> any account exists. Review each applicant, then approve &amp; invite, request more information, or decline — submitting an EOI never creates an account.</p></div>
+      <div class="tabs" style="margin-bottom:12px">${fbtn('all','All')}${fbtn('developer','Developers')}${fbtn('buyer','Buyers')}</div>
+      <div class="card" style="overflow:hidden"><table><thead><tr><th>Applicant</th><th>Type</th><th>Ref / date</th><th>Status</th><th></th></tr></thead>
+      <tbody>${rows||`<tr><td colspan="5" class="muted tiny" style="padding:16px">No applications yet. They appear here when a developer or buyer submits an expression of interest on the website.</td></tr>`}</tbody></table></div>`;
+  }
+  function eoiFilter(k){ EOIFILTER=k; $('#panel').innerHTML=applicationsPanel(); }
+  function reviewEoi(id){ const a=EOIS.find(x=>x.id===id); if(!a) return; EOIEDIT=id;
+    const d=a.details||{}; const row=(k,v)=>v?`<div><div class="tiny muted">${esc(k)}</div>${esc(String(v))}</div>`:'';
+    const detailRows = a.kind==='developer'
+      ? [row('Company',a.company),row('Trading name',d.tradingName),row('Reg. number',d.regNumber),row('Website',d.website),row('Years operating',d.years),row('Completed devs',d.completedDevelopments),row('Position',d.position),row('Category',d.category),row('Property types',d.propertyTypes),row('Location',d.location),row('Project status',d.projectStatus),row('Est. units',d.units),row('Price range',d.priceRange),row('Nature of interest',d.nature),row('Brochure',d.brochure)].join('')
+      : [row('Country',a.country),row('Interest',d.interest),row('Preferred type',d.preferredType),row('Preferred location',d.preferredLocation),row('Budget',d.budget),row('Funding',d.funding),row('Timeline',d.timeline)].join('');
+    const descr = a.kind==='developer' ? (d.description||'') : (d.comments||'');
+    const sel=(name,val,opts)=>`<select id="${name}">${opts.map(o=>`<option value="${o[0]}" ${String(val||'')===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>`;
+    $('#mTitle').textContent='Review application';
+    $('#mBody').innerHTML=`<div class="card pad" style="background:var(--soft);margin-bottom:14px"><b>${esc(a.full_name||'')}</b> · ${esc(a.email||'')} ${a.phone?('· '+esc(a.phone)):''}<br>
+      <span class="tiny muted">${a.kind==='developer'?'Developer':'Buyer / Co-Developer'} · ${esc(a.ref||'')} · ${esc(String(a.created_at||'').slice(0,10))}</span></div>
+      <div class="grid g2" style="gap:10px">${detailRows}</div>
+      ${descr?`<div style="margin-top:10px"><div class="tiny muted">${a.kind==='developer'?'Project description':'Comments'}</div><div class="small" style="white-space:pre-wrap">${esc(descr)}</div></div>`:''}
+      <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
+      <div class="field"><label>Status</label>${sel('eStatus',a.status,[['new','New'],['under_review','Under review'],['info_requested','Additional info requested'],['approved','Approved'],['declined','Declined'],['invited','Invited'],['activated','Account activated']])}</div>
+      <div class="field"><label>Internal notes</label><textarea id="eNotes" rows="3">${esc(a.admin_notes||'')}</textarea></div>
+      <div class="row" style="gap:8px;flex-wrap:wrap">
+        <button class="btn sm" onclick="ADMIN.saveEoi()">Save</button>
+        <button class="btn sm navy" onclick="ADMIN.saveEoi('approved')">Approve</button>
+        <button class="btn sm" onclick="ADMIN.saveEoi('info_requested')">Request info</button>
+        <button class="btn sm danger" onclick="ADMIN.saveEoi('declined')">Decline</button>
+        ${a.email?`<button class="btn sm primary" onclick="ADMIN.saveEoi('invited')">Approve &amp; send invite</button>`:''}
+      </div>
+      <p class="tiny muted" style="margin-top:8px">“Approve &amp; send invite” marks the applicant <b>Invited</b> and emails them a secure link to create their account. Submitting an EOI never creates an account on its own.</p>`;
+    $('#modal').classList.add('open'); document.body.style.overflow='hidden';
+  }
+  async function saveEoi(forceStatus){ if(!EOIEDIT) return; const id=EOIEDIT;
+    const patch={ status: forceStatus || ($('#eStatus')&&$('#eStatus').value) || 'under_review', admin_notes: ($('#eNotes')&&$('#eNotes').value)||null };
+    try{ await db.eoi.update(id,patch); closeModal(); toast(forceStatus==='invited'?'Approved — invitation email sent':'Application updated'); await loadApplications(); }
     catch(err){ toast(err.message||'Save failed'); } }
 
   // ---------- PROPERTIES ----------
@@ -665,7 +722,8 @@
 
   function closeModal(){ $('#modal').classList.remove('show'); }
   window.ADMIN={login,lock,tab,setStatus,setSold,copyRef,onTypeChange,addItem,delItem,itemSet,itemSize,reviewDoc,uploadDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,txSetUnit,txAddPay,txPaySet,txDelPay,admAccess,delProp,editProp,saveProp,newProp,createProp,itemCoords,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,viewDev,openDevFile,openDevExtra,closeModal,forgot,backToLogin,forgotSend,forgotReset,
-    addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps};
+    addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps,
+    loadApplications,reviewEoi,eoiFilter,saveEoi};
 
   // Session timeout in the admin console → message, then back to the sign-in gate.
   window.addEventListener('codev:session-expired', () => { try{ toast('Your session timed out — please sign in again.'); }catch(e){} setTimeout(()=>location.reload(), 1300); });

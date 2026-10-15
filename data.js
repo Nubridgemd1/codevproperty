@@ -318,6 +318,23 @@ window.CODEV = (function () {
       async listAll() { return sb('/rest/v1/qualifications?order=created_at.desc&select=*'); },
       async update(id, patch) { return sb('/rest/v1/qualifications?id=eq.' + id, { method: 'PATCH', body: patch, prefer: 'return=representation' }); },
     },
+    // Expression of Interest applications (controlled onboarding — pre-account).
+    // Public/anon INSERT is allowed by RLS (see EOI-APPLICATIONS.sql); submitting
+    // never creates an account. Admins read/update in the console.
+    eoi: {
+      async add(a) {
+        const row = { kind: a.kind, status: 'new',
+          full_name: a.fullName || null, email: a.email || null, phone: a.phone || null,
+          company: a.company || null, country: a.country || null,
+          details: a.details || {}, consent: !!a.consent };
+        // anon insert: the applicant has no account yet.
+        return sb('/rest/v1/eoi_applications', { method: 'POST', anon: true, body: row, prefer: 'return=representation' });
+      },
+      async listAll() { return sb('/rest/v1/eoi_applications?order=created_at.desc&select=*'); },
+      async update(id, patch) { const s = getSession(); const body = Object.assign({}, patch);
+        if (patch.status) { body.reviewed_by = (s && s.user && s.user.id) || null; body.reviewed_at = nowISO(); }
+        return sb('/rest/v1/eoi_applications?id=eq.' + id, { method: 'PATCH', body, prefer: 'return=representation' }); },
+    },
     // Platform settings (super-admin editable). FX rates convert investor amount bands from USD.
     settings: {
       async getFx() { try { const r = await sb('/rest/v1/platform_settings?key=eq.fx&select=value', { anon: true });
@@ -471,6 +488,13 @@ window.CODEV = (function () {
       async listMine() { const s = rd(L.sess, null); return s ? rd('codev_qualifications', []).filter(q => q.user_id === s.id) : []; },
       async listAll() { return rd('codev_qualifications', []); },
       async update(id, patch) { const list = rd('codev_qualifications', []); const i = list.findIndex(q => q.id === id); if (i < 0) return; list[i] = { ...list[i], ...patch }; wr('codev_qualifications', list); return list[i]; },
+    },
+    eoi: {
+      async add(a) { const list = rd('codev_eoi', []); const r = { id: uid(), ref: 'EOI-' + uid().slice(-6).toUpperCase(), created_at: nowISO(), status: 'new',
+          kind: a.kind, full_name: a.fullName || '', email: a.email || '', phone: a.phone || '', company: a.company || '', country: a.country || '', details: a.details || {}, consent: !!a.consent };
+        list.unshift(r); wr('codev_eoi', list); return r; },
+      async listAll() { return rd('codev_eoi', []); },
+      async update(id, patch) { const list = rd('codev_eoi', []); const i = list.findIndex(x => x.id === id); if (i < 0) return; list[i] = { ...list[i], ...patch, reviewed_at: nowISO() }; wr('codev_eoi', list); return list[i]; },
     },
     settings: {
       async getFx() { return Object.assign({}, CFG.FX_DEFAULT, rd('codev_fx', {})); },

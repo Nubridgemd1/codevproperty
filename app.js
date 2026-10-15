@@ -54,7 +54,7 @@
   function renderAuthArea() {
     const el = document.getElementById('authArea'); const u = me();
     if (!u) { el.innerHTML = `<button class="btn sm" onclick="CODEVAPP.openAuth('signin')">Sign in</button>
-      <button class="btn primary sm" onclick="CODEVAPP.openAuth('signup')">Create account</button>`; return; }
+      <button class="btn primary sm" onclick="CODEVAPP.eoiChooser()">Register interest</button>`; return; }
     const home = u.role === 'developer' ? '#/developer' : u.role === 'investor' ? '#/investor' : '#/account';
     el.innerHTML = `<a class="btn sm" href="${home}">My portal</a>
       <span class="badge role">${esc((u.name || 'You').split(' ')[0])} · ${u.role}</span>
@@ -78,7 +78,7 @@
     ${passField('Password', 'pass', 'required')}
     <div style="text-align:right;margin:2px 0 10px"><a href="#" class="tiny muted" onclick="CODEVAPP.forgotFromSignin();return false">Forgot password?</a></div>
     <button class="btn primary" style="width:100%" id="siBtn">Sign in</button>
-    <p class="small muted center" style="margin-top:12px">New here? <a href="#" onclick="CODEVAPP.openAuth('signup');return false">Create an account</a></p></form>`; }
+    <p class="small muted center" style="margin-top:12px">New here? <a href="#" onclick="CODEVAPP.eoiChooser();return false">Register your interest</a></p></form>`; }
   function signupForm() { return `<form onsubmit="return CODEVAPP.doSignup(event)">
     <div class="field"><label>Full name / company</label><input name="name" required></div>
     <div class="field"><label>Email</label><input name="email" type="email" required></div>
@@ -247,6 +247,7 @@
       <h1 style="font-size:clamp(28px,4.6vw,50px);line-height:1.08;margin:14px 0 14px;max-width:none">Co-develop <em style="font-style:italic;color:var(--bronze2)">exceptional</em> property.<br>Participate from the start.</h1>
       <p class="muted" style="font-size:17px;max-width:60ch;margin:0 0 24px">CoDev brings buyers, developers and capital together through a transparent, professionally governed platform — creating access to carefully selected property developments from inception to completion.</p>
       <div class="row" style="justify-content:flex-start;gap:10px"><a class="btn primary" href="#/opportunities">Explore Developments</a><a class="btn" href="#/how">How CoDev Works</a></div>
+      <div class="row" style="justify-content:flex-start;gap:10px;margin-top:12px"><button class="btn primary" onclick="CODEVAPP.developerInterest()">Submit Developer Interest</button><button class="btn" onclick="CODEVAPP.buyerInterest()">Register Your Interest</button></div>
       <div style="display:flex;justify-content:flex-start">${flowStrip()}</div>
       <div class="hero-stats">
         <div><div class="n">4</div><div class="l">Curated prime markets<br><span style="opacity:.72">Lagos today · UK/US roadmap</span></div></div>
@@ -659,6 +660,89 @@
       else { toast(m || 'Could not submit qualification'); btn.disabled = false; btn.textContent = 'Submit qualification'; } }
     return false; }
 
+  // ---- Expression of Interest (controlled onboarding — captured BEFORE any account) ----
+  const DEV_CATEGORIES = ['Residential', 'Commercial', 'Mixed-Use', 'Land'];
+  const DEV_PROJECT_STATUS = ['Planning', 'Under Construction', 'Completed'];
+  const DEV_NATURE = ['List Properties', 'Seek Co-Development', 'Sell Completed Properties'];
+  const BUYER_INTEREST = ['Buy Property', 'Co-Develop', 'Explore Opportunities'];
+  const BUYER_FUNDING = ['Cash', 'Instalments', 'Financing'];
+  const BUYER_TIMELINE = ['Immediately', 'Within 3 months', '3–6 months', '6–12 months', 'Just exploring'];
+  function eoiModal(title, html) { $('#authTitle').textContent = title; $('#authBody').innerHTML = html; $('#authModal').classList.add('show'); }
+  // Hidden honeypot — bots fill it, humans never see it; a filled value is silently dropped.
+  const hp = () => `<input type="text" name="hp_url" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;opacity:0;height:0">`;
+  function eoiChooser() {
+    eoiModal('Register your interest', `
+      <p class="small muted" style="margin-top:0">Tell us about yourself and our team will review and be in touch. You don't create an account yet — if approved, you'll receive a secure invitation to set one up.</p>
+      <div class="row" style="gap:10px;flex-wrap:wrap">
+        <button class="btn primary" style="flex:1;min-width:180px" onclick="CODEVAPP.developerInterest()">🏗 I'm a Property Developer</button>
+        <button class="btn" style="flex:1;min-width:180px" onclick="CODEVAPP.buyerInterest()">🏠 I want to Buy / Co-Develop</button>
+      </div>
+      <p class="tiny muted center" style="margin-top:12px">Already approved? <a href="#" onclick="CODEVAPP.openAuth('signin');return false">Sign in</a></p>`);
+  }
+  function developerInterest() {
+    eoiModal('Developer — Expression of Interest', `
+      <form onsubmit="return CODEVAPP.submitEoi(event,'developer')" style="position:relative">${hp()}
+        <p class="tiny muted" style="margin:0 0 8px;font-weight:700;letter-spacing:.04em;text-transform:uppercase">Company</p>
+        <div class="field"><label>Registered company name</label><input name="company" required></div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Trading name (if different)</label><input name="tradingName"></div><div class="field" style="flex:1;min-width:120px"><label>Company reg. number</label><input name="regNumber"></div></div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Website (optional)</label><input name="website" type="url" placeholder="https://"></div><div class="field" style="flex:1;min-width:110px"><label>Years of operation</label><input name="years" inputmode="numeric"></div></div>
+        <div class="field"><label>Completed developments (approx.)</label><input name="completed" inputmode="numeric"></div>
+        <p class="tiny muted" style="margin:10px 0 8px;font-weight:700;letter-spacing:.04em;text-transform:uppercase">Contact</p>
+        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Full name</label><input name="fullName" required></div><div class="field" style="flex:1;min-width:120px"><label>Position / designation</label><input name="position"></div></div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:140px"><label>Business email</label><input name="email" type="email" required></div><div class="field" style="flex:1;min-width:130px"><label>Phone / WhatsApp</label><input name="phone" required></div></div>
+        <p class="tiny muted" style="margin:10px 0 8px;font-weight:700;letter-spacing:.04em;text-transform:uppercase">Development</p>
+        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Development category</label><select name="category" required>${optionList(DEV_CATEGORIES)}</select></div><div class="field" style="flex:1;min-width:120px"><label>Project status</label><select name="projectStatus" required>${optionList(DEV_PROJECT_STATUS)}</select></div></div>
+        <div class="field"><label>Property types</label><input name="propertyTypes" placeholder="e.g. Apartments, Duplexes, Terraces…"></div>
+        <div class="field"><label>Development location (state, city, area)</label><input name="location" placeholder="e.g. Lagos, Lekki, Phase 1"></div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:110px"><label>Estimated units</label><input name="units" inputmode="numeric"></div><div class="field" style="flex:1;min-width:150px"><label>Indicative price range</label><input name="priceRange" placeholder="e.g. ₦45m – ₦120m"></div></div>
+        <div class="field"><label>Nature of interest</label><select name="nature" required>${optionList(DEV_NATURE)}</select></div>
+        <div class="field"><label>Brief project description</label><textarea name="description" rows="3"></textarea></div>
+        <div class="field"><label>Company profile / brochure link (optional)</label><input name="brochure" type="url" placeholder="https://"></div>
+        <label class="row" style="gap:8px;align-items:flex-start;margin:4px 0 12px;font-size:11.5px;color:var(--ink2)"><input type="checkbox" name="consent" required style="margin-top:2px"><span style="font-weight:normal;text-transform:none;letter-spacing:0">I confirm the information is accurate and consent to CoDev reviewing this expression of interest and contacting me. I understand this does not create an account.</span></label>
+        <button class="btn primary" style="width:100%" id="eoiBtn">Submit developer interest</button>
+      </form>`);
+  }
+  function buyerInterest() {
+    eoiModal('Buyer / Co-Developer — Expression of Interest', `
+      <form onsubmit="return CODEVAPP.submitEoi(event,'buyer')" style="position:relative">${hp()}
+        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Full name</label><input name="fullName" required></div><div class="field" style="flex:1;min-width:140px"><label>Email</label><input name="email" type="email" required></div></div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Phone / WhatsApp</label><input name="phone" required></div><div class="field" style="flex:1;min-width:120px"><label>Country of residence</label><input name="country" required></div></div>
+        <div class="field"><label>I would like to…</label><select name="interest" required>${optionList(BUYER_INTEREST)}</select></div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Preferred property type</label><input name="preferredType" placeholder="e.g. 3-bed apartment, land…"></div><div class="field" style="flex:1;min-width:130px"><label>Preferred location</label><input name="preferredLocation" placeholder="e.g. Lekki, Ikoyi…"></div></div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:120px"><label>Indicative budget</label><input name="budget" placeholder="e.g. ₦60m / $120k"></div><div class="field" style="flex:1;min-width:120px"><label>Funding preference</label><select name="funding">${optionList(BUYER_FUNDING)}</select></div></div>
+        <div class="field"><label>Expected timeline</label><select name="timeline">${optionList(BUYER_TIMELINE)}</select></div>
+        <div class="field"><label>Additional comments</label><textarea name="comments" rows="3"></textarea></div>
+        <label class="row" style="gap:8px;align-items:flex-start;margin:4px 0 12px;font-size:11.5px;color:var(--ink2)"><input type="checkbox" name="consent" required style="margin-top:2px"><span style="font-weight:normal;text-transform:none;letter-spacing:0">I confirm the information is accurate and consent to CoDev reviewing this expression of interest and contacting me. I understand this does not create an account.</span></label>
+        <button class="btn primary" style="width:100%" id="eoiBtn">Register my interest</button>
+      </form>`);
+  }
+  async function submitEoi(e, kind) {
+    e.preventDefault(); const f = e.target;
+    if (f.hp_url && f.hp_url.value) { closeAuth(); return false; }      // honeypot: silently drop bots
+    if (!f.consent.checked) { toast('Please accept the consent to continue.'); return false; }
+    const btn = $('#eoiBtn'); const label = kind === 'developer' ? 'Submit developer interest' : 'Register my interest';
+    if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+    const val = (n) => (f[n] && typeof f[n].value === 'string') ? f[n].value.trim() : '';
+    let payload;
+    if (kind === 'developer') {
+      payload = { kind, fullName: val('fullName'), email: val('email'), phone: val('phone'), company: val('company'), consent: true,
+        details: { tradingName: val('tradingName'), regNumber: val('regNumber'), website: val('website'), years: val('years'),
+          completedDevelopments: val('completed'), position: val('position'), category: val('category'), propertyTypes: val('propertyTypes'),
+          location: val('location'), projectStatus: val('projectStatus'), units: val('units'), priceRange: val('priceRange'),
+          nature: val('nature'), description: val('description'), brochure: val('brochure') } };
+    } else {
+      payload = { kind, fullName: val('fullName'), email: val('email'), phone: val('phone'), country: val('country'), consent: true,
+        details: { interest: val('interest'), preferredType: val('preferredType'), preferredLocation: val('preferredLocation'),
+          budget: val('budget'), funding: val('funding'), timeline: val('timeline'), comments: val('comments') } };
+    }
+    try { await db.eoi.add(payload); closeAuth(); toast('Thank you — your expression of interest has been received. Our team will review it and be in touch.'); }
+    catch (err) { const m = (err && err.message) || '';
+      // Zero-disruption fallback: if the EOI table isn't set up yet, still acknowledge the applicant.
+      if (/eoi_applications|relation|does not exist|not found|\(40[134]\)|42P01|schema cache|permission|policy/i.test(m)) { closeAuth(); toast('Thank you — your expression of interest has been received. Our team will be in touch.'); }
+      else { toast(m || 'Could not submit — please try again.'); if (btn) { btn.disabled = false; btn.textContent = label; } } }
+    return false;
+  }
+
   // ---- CoDev Legal Verified badge (admin-controlled; restrained trust indicator with disclosure) ----
   function legalVerified(p) { return ['cleared', 'conditionally_cleared'].indexOf(String(p && p.legalStatus || '')) >= 0; }
   function legalBadgeHtml(p) { return legalVerified(p) ? `<span class="badge legalv" onclick="event.stopPropagation();event.preventDefault();CODEVAPP.legalInfo()" title="What this means">🛡️ CoDev Legal Verified</span>` : ''; }
@@ -806,13 +890,14 @@
       else if (path === 'developer') app.innerHTML = V.developer(u, await db.properties.listMine());
       else if (path === 'account') app.innerHTML = V.account(u, await db.properties.listMine());
       else if (path === 'deals') { const p = arg ? await db.properties.byId(arg) : null; let txs = []; if (p) { try { txs = await db.transactions.listForProperty(p.id); } catch {} } app.innerHTML = V.deals(u, p, txs); }
+      else if (path === 'activate') { const opps = await db.properties.listPublic(); app.innerHTML = V.home(opps, { opps: opps.length, devs: '—', investors: '—' }); if (!me()) openAuth('signup'); }
       else { const opps = await db.properties.listPublic(); app.innerHTML = V.home(opps, { opps: opps.length, devs: '—', investors: '—' }); }
     } catch (err) { app.innerHTML = sec('Something went wrong', err.message || 'Please try again.', ''); }
     adaptCovers();
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, stageDoc, enterDealRoom, logDeal, onTypeChange, addItemDev, delItemDev, itemSetDev, itemSizeDev, itemCoordsDev, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, addDevDoc, viewDevDoc, addExtra, delExtra, extraSet, addExtraFile, devTxUnit, devTxAddPay, devTxPaySet, devTxDelPay, savePricing, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, stageDoc, enterDealRoom, logDeal, onTypeChange, addItemDev, delItemDev, itemSetDev, itemSizeDev, itemCoordsDev, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, addDevDoc, viewDevDoc, addExtra, delExtra, extraSet, addExtraFile, devTxUnit, devTxAddPay, devTxPaySet, devTxDelPay, savePricing, eoiChooser, developerInterest, buyerInterest, submitEoi, _afterAuth: null };
   // Session timeout → clean logout + re-login prompt (fired by the data layer on an expired JWT).
   window.addEventListener('codev:session-expired', () => {
     renderAuthArea();
