@@ -11,7 +11,7 @@
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=29" />
+<link rel="stylesheet" href="styles.css?v=30" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -50,7 +50,7 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=29"></script>
+<script src="data.js?v=30"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
@@ -201,7 +201,7 @@
       <div class="field"><label>Overall qualification status</label>${sel('qStatus',q.status,[['qualification_in_progress','In review'],['more_info','More information needed'],['qualified','Qualified'],['codev_verified','CoDev Verified'],['not_qualified','Not qualified'],['withdrawn','Withdrawn']])}</div>
       <p class="tiny muted">Set <b>CoDev Verified</b> only after identity, KYC/AML, intent, capacity and source of funds are satisfied. This gates Deal Room access.</p>
       <button class="btn primary" style="width:100%" onclick="ADMIN.saveQ()">Save decision</button>`;
-    $('#modal').classList.add('open'); document.body.style.overflow='hidden';
+    $('#modal').classList.add('show');
   }
   let QEDIT=null;
   async function saveQ(){ if(!QEDIT) return; const id=QEDIT;
@@ -258,7 +258,7 @@
         ${a.email?`<button class="btn sm primary" onclick="ADMIN.saveEoi('invited')">Approve &amp; send invite</button>`:''}
       </div>
       <p class="tiny muted" style="margin-top:8px">“Approve &amp; send invite” marks the applicant <b>Invited</b> and emails them a secure link to create their account. Submitting an EOI never creates an account on its own.</p>`;
-    $('#modal').classList.add('open'); document.body.style.overflow='hidden';
+    $('#modal').classList.add('show');
   }
   async function saveEoi(forceStatus){ if(!EOIEDIT) return; const id=EOIEDIT;
     const patch={ status: forceStatus || ($('#eStatus')&&$('#eStatus').value) || 'under_review', admin_notes: ($('#eNotes')&&$('#eNotes').value)||null };
