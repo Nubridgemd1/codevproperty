@@ -262,6 +262,21 @@ window.CODEV = (function () {
       async setStatus(id, status) { return sbDB.properties.update(id, { status, verifiedAt: status === 'verified' ? nowISO() : null }); },
       // Developer self-service: updates ONLY pricing on a listing they own (via SECURITY DEFINER fn).
       async updatePricing(id, { items, priceFrom }) { return sb('/rest/v1/rpc/dev_update_listing_pricing', { method: 'POST', body: { p_id: id, p_items: Array.isArray(items) ? items : [], p_price_from: (priceFrom === '' || priceFrom == null) ? null : Number(priceFrom) } }); },
+      // Developer self-service: full edit of a listing they own — fields + items + prices + schedule (via SECURITY DEFINER fn). Milestones only touched when provided.
+      async updateDetails(id, d) { d = d || {}; return sb('/rest/v1/rpc/dev_update_listing_details', { method: 'POST', body: {
+        p_id: id,
+        p_title: (d.title == null) ? null : d.title,
+        p_location: (d.location == null) ? null : d.location,
+        p_address: (d.address == null) ? null : d.address,
+        p_summary: (d.summary == null) ? null : d.summary,
+        p_units: (d.units === '' || d.units == null) ? null : Number(d.units),
+        p_delivery_date: (d.deliveryDate == null) ? null : d.deliveryDate,
+        p_stage: (d.stage == null) ? null : d.stage,
+        p_price_from: (d.priceFrom === '' || d.priceFrom == null) ? null : Number(d.priceFrom),
+        p_items: Array.isArray(d.items) ? d.items : null,
+        p_images: Array.isArray(d.images) ? d.images : null,
+        p_milestones: Array.isArray(d.milestones) ? d.milestones : null
+      } }); },
       async remove(id) { return sb('/rest/v1/properties?id=eq.' + id, { method: 'DELETE' }); },
     },
     profiles: {

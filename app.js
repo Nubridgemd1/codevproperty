@@ -378,6 +378,42 @@
           <div class="row" style="gap:10px;margin-top:16px"><button class="btn primary" onclick="CODEVAPP.savePricing()">Save pricing</button><a class="btn" href="${back}">Cancel</a></div>
         </div>`);
     },
+    editListing(u, p) {
+      if (!p) return sec('Not found', '', empty('Listing not found.'));
+      const isOwner = u && p.submittedBy && u.email && String(p.submittedBy).toLowerCase() === String(u.email).toLowerCase();
+      const back = u && u.role === 'developer' ? '#/developer' : '#/account';
+      if (!isOwner) return sec('', '', `<a class="small muted" href="${back}">← Back</a>${empty('You can only edit your own listings.')}`);
+      editListingPid = p.id; editMsDirty = false;
+      listingPhotos = JSON.parse(JSON.stringify(p.images || []));
+      listingItems = (p.items && p.items.length) ? JSON.parse(JSON.stringify(p.items)) : [{ type: '', bedrooms: '', landSqm: '', landSqft: '', coords: '', units: '', price: '' }];
+      editMs = JSON.parse(JSON.stringify(p.milestones || []));
+      return sec('', '', `<a class="small muted" href="${back}">← Back to my listings</a>
+        <h1 style="font-size:26px;margin:8px 0 2px">Edit: ${esc(p.title)}</h1>
+        <div class="muted" style="margin-bottom:2px">${p.ref ? 'Ref ' + esc(p.ref) + ' · ' : ''}Update your listing — details, properties &amp; prices, photos and the construction schedule. Changes appear on the public listing immediately.</div>
+        <div class="tiny muted" style="margin-bottom:14px">Status, legal review and verification stay with CoDev. <a href="#/docs/${p.id}">Manage documents →</a> &nbsp;·&nbsp; <a href="#/deals/${p.id}">Deals &amp; payment calls →</a></div>
+        <form class="card pad" onsubmit="return CODEVAPP.saveEditListing(event)">
+          <div class="field"><label>Property / development title</label><input name="title" value="${esc(p.title || '')}" required></div>
+          <div class="field"><label>Location <span class="tiny muted">(area — used for buyer filters)</span></label><input name="location" list="locOptionsEdit" value="${esc(p.location || '')}" autocomplete="off">
+            <datalist id="locOptionsEdit">${(CFG.LOCATIONS || []).map(l => `<option value="${esc(l)}"></option>`).join('')}</datalist></div>
+          <div class="field"><label>Address <span class="tiny muted">(full project address)</span></label><input name="address" value="${esc(p.address || '')}" placeholder="Street, area, city, state"></div>
+          <div class="field"><label>Properties in this development <span class="tiny muted">— add each property / unit type with its own price; residential shows bedrooms, land shows size</span></label>
+            <div id="itemRowsDev" class="grid" style="gap:8px">${itemsDevHtml()}</div>
+            <button type="button" class="btn sm" style="margin-top:8px" onclick="CODEVAPP.addItemDev()">+ Add property</button></div>
+          <div class="row" style="gap:12px">
+            <div class="field" style="flex:1"><label>Total number of units</label><input name="units" type="number" min="0" step="1" value="${(p.units === 0 || p.units) ? p.units : ''}"></div>
+            <div class="field" style="flex:1"><label>Proposed delivery date</label><input name="deliveryDate" type="date" value="${esc(p.deliveryDate || '')}"></div></div>
+          <div class="field"><label>Summary</label><textarea name="summary" rows="3">${esc(p.summary || '')}</textarea></div>
+          <div class="field"><label>Photos <span class="tiny muted">— up to ${MAX_PHOTOS}</span></label>
+            <label class="photo-drop"><input type="file" accept="image/*,.heic,.heif" multiple onchange="CODEVAPP.addPhotos(this)"><span class="pd-inner">📷 Add photos or take a picture</span></label>
+            <div id="photoPreviews" class="photo-grid">${listingPhotos.map((d, i) => `<div class="ph-thumb"><img src="${d}" alt="photo ${i + 1}"><button type="button" aria-label="Remove photo" onclick="CODEVAPP.removePhoto(${i})">✕</button></div>`).join('')}</div></div>
+          <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Participation from (₦)</label><input name="priceFrom" type="number" min="0" value="${(p.priceFrom === 0 || p.priceFrom) ? p.priceFrom : ''}"></div>
+            <div class="field" style="flex:1"><label>Construction stage</label><select name="stage">${CFG.STAGES.map(x => `<option ${x === p.stage ? 'selected' : ''}>${x}</option>`).join('')}</select></div></div>
+          <div class="spread" style="margin:6px 0 4px"><label style="margin:0">Construction schedule &amp; milestones</label><button type="button" class="btn sm" onclick="CODEVAPP.addEditMs()">+ Phase</button></div>
+          <div style="overflow-x:auto"><table style="font-size:14px;width:100%"><thead><tr><th style="text-align:left">Phase</th><th style="text-align:left">%</th><th style="text-align:left">Target date</th><th style="text-align:left">Certification</th><th></th></tr></thead><tbody id="editMsRows">${editMsHtml()}</tbody></table></div>
+          <p class="tiny muted" style="margin:6px 0 0">You set the schedule (name, % of funds released at each phase, target date). <b>Certification is done by CoDev</b> — editing the schedule marks it for re-certification. Buyer payment calls are managed under <a href="#/deals/${p.id}">Deals</a>.</p>
+          <div class="row" style="gap:10px;margin-top:14px"><button class="btn primary">Save changes</button><a class="btn" href="${back}">Cancel</a></div>
+        </form>`);
+    },
     dealRoom(u, p, st) {
       if (!p) return sec('Not found', '', empty('Development not found.'));
       const head = `<a class="small muted" href="#/opp/${p.id}">← Back to ${esc(p.title)}</a>
@@ -408,7 +444,7 @@
   };
   function listCards(mine) { if (!mine || !mine.length) return `<div class="card pad small muted">No submissions yet. <a href="#/list">List a property →</a></div>`;
     return `<div class="grid" style="gap:10px">${mine.map(p => `<div class="card pad"><div class="spread"><div class="row" style="gap:11px;align-items:center">${p.images && p.images[0] ? `<img src="${p.images[0]}" alt="" style="width:48px;height:48px;border-radius:9px;object-fit:cover;flex:none">` : ''}<div><b>${esc(p.title)}</b>${p.ref ? ` <span class="tiny" style="font-family:monospace;color:var(--ink2)">${esc(p.ref)}</span>` : ''}<div class="tiny muted">${esc(p.location)} · ${fmtN(p.priceFrom)} · funded ${funded(p)}%</div>${(function(){ const mc=(p.items||[]).map(it=>it&&it.coords).find(c=>window.CODEV.mapUrl(c)); const mu=mc?window.CODEV.mapUrl(mc):''; return mu?`<a class="tiny" href="${mu}" target="_blank" rel="noopener" style="color:var(--bronze);font-weight:600">📍 ${esc(window.CODEV.coordsLabel(mc))} — map</a>`:''; })()}</div></div><div style="text-align:right"><span class="badge ${p.status}">${p.status}</span>${p.sold ? ' <span class="badge sold">SOLD</span>' : ''}</div></div>
-      <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><a class="btn sm" href="#/pricing/${p.id}">💲 Update pricing</a><a class="btn primary sm" href="#/docs/${p.id}">📤 Upload / manage documents</a><a class="btn sm" href="#/deals/${p.id}">💳 Deals &amp; payment calls</a></div></div>`).join('')}</div>`; }
+      <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><a class="btn primary sm" href="#/edit/${p.id}">✏️ Edit listing</a><a class="btn sm" href="#/docs/${p.id}">📤 Documents</a><a class="btn sm" href="#/deals/${p.id}">💳 Deals &amp; payments</a></div></div>`).join('')}</div>`; }
   function docRowDev(pid, r) { const d = r.doc || {}; const st = d.status || 'awaiting';
     return `<div class="card pad">
       <div class="spread"><b>${esc(r.label)}</b>${docStatusBadge(st)}</div>
@@ -446,6 +482,29 @@
     try { await db.properties.updatePricing(pricingPid, { items, priceFrom }); toast('Pricing updated'); location.hash = (me() && me().role === 'developer') ? '#/developer' : '#/account'; route(); }
     catch (e) { toast((e && e.message) || 'Could not update pricing'); }
   }
+  // ---- Developer: full "Edit listing" (own listings only) ----
+  let editMs = [], editListingPid = null, editMsDirty = false;
+  function editMsRowHtml(m, i) { const lbl = (CFG.MILESTONE_STATUS_LABELS && CFG.MILESTONE_STATUS_LABELS[m.status]) || m.status || 'pending';
+    return `<tr class="subrow">
+      <td><input value="${esc(m.name || '')}" onchange="CODEVAPP.editMsSet(${i},'name',this.value)"></td>
+      <td style="width:70px"><input type="number" min="0" max="100" value="${(m.pct === 0 || m.pct) ? m.pct : 0}" onchange="CODEVAPP.editMsSet(${i},'pct',Number(this.value))"></td>
+      <td style="width:150px"><input type="date" value="${esc(m.targetDate || '')}" onchange="CODEVAPP.editMsSet(${i},'targetDate',this.value)"></td>
+      <td style="width:120px"><span class="tiny muted">${esc(lbl)}</span></td>
+      <td><button type="button" class="btn ghost sm" onclick="CODEVAPP.delEditMs(${i})">✕</button></td></tr>`; }
+  function editMsHtml() { return (editMs || []).map((m, i) => editMsRowHtml(m, i)).join('') || `<tr><td colspan="5" class="tiny muted">No milestones — add a phase.</td></tr>`; }
+  function renderEditMs() { const b = document.getElementById('editMsRows'); if (b) b.innerHTML = editMsHtml(); }
+  function addEditMs() { editMsDirty = true; editMs.push({ name: '', pct: 0, status: 'pending', targetDate: '', releasedDate: '' }); renderEditMs(); }
+  function editMsSet(i, k, v) { editMsDirty = true; if (editMs[i]) editMs[i][k] = v; }
+  function delEditMs(i) { editMsDirty = true; editMs.splice(i, 1); renderEditMs(); }
+  async function saveEditListing(e) { e.preventDefault(); if (!editListingPid) return false; const f = e.target;
+    const btn = f.querySelector('button[type=submit],button:not([type])'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    const d = { title: f.title.value.trim(), location: f.location.value.trim(), address: f.address.value.trim(),
+      items: (listingItems || []).filter(it => it.type), units: f.units.value, deliveryDate: f.deliveryDate.value,
+      summary: f.summary.value.trim(), priceFrom: f.priceFrom.value, stage: f.stage.value, images: listingPhotos.slice() };
+    if (editMsDirty) d.milestones = (editMs || []).map(m => ({ name: m.name || '', pct: Number(m.pct) || 0, targetDate: m.targetDate || '' }));
+    try { await db.properties.updateDetails(editListingPid, d); toast('Listing updated'); location.hash = (me() && me().role === 'developer') ? '#/developer' : '#/account'; route(); }
+    catch (err) { toast((err && err.message) || 'Could not update listing'); if (btn) { btn.disabled = false; btn.textContent = 'Save changes'; } }
+    return false; }
   async function enterDealRoom(pid) { const ck = document.getElementById('ndaAck'); if (!ck || !ck.checked) { toast('Please acknowledge the confidentiality terms'); return; }
     try { await db.dealroom.acknowledge(pid, 'v1'); toast('Welcome to the Deal Room'); route(); } catch (e) { toast((e && e.message) || 'Could not open the Deal Room'); } }
   function logDeal(pid, key, event) { try { db.dealroom.log(pid, event, key); } catch (e) {} }
@@ -891,6 +950,7 @@
         app.innerHTML = V.dealRoom(u, p, { verified, access, docs, report, txs }); }
       else if (path === 'how') app.innerHTML = V.how();
       else if (path === 'pricing') { const p = await db.properties.byId(arg); app.innerHTML = V.pricing(u, p); }
+      else if (path === 'edit') { const p = await db.properties.byId(arg); app.innerHTML = V.editListing(u, p); }
       else if (path === 'list') app.innerHTML = V.list(u, await db.properties.listMine());
       else if (path === 'investor') app.innerHTML = V.investor(u, await db.properties.listPublic());
       else if (path === 'developer') app.innerHTML = V.developer(u, await db.properties.listMine());
@@ -903,7 +963,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, stageDoc, enterDealRoom, logDeal, onTypeChange, addItemDev, delItemDev, itemSetDev, itemSizeDev, itemCoordsDev, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, addDevDoc, viewDevDoc, addExtra, delExtra, extraSet, addExtraFile, devTxUnit, devTxAddPay, devTxPaySet, devTxDelPay, savePricing, eoiChooser, developerInterest, buyerInterest, submitEoi, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, stageDoc, enterDealRoom, logDeal, onTypeChange, addItemDev, delItemDev, itemSetDev, itemSizeDev, itemCoordsDev, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, addDevDoc, viewDevDoc, addExtra, delExtra, extraSet, addExtraFile, devTxUnit, devTxAddPay, devTxPaySet, devTxDelPay, savePricing, saveEditListing, addEditMs, editMsSet, delEditMs, eoiChooser, developerInterest, buyerInterest, submitEoi, _afterAuth: null };
   // Session timeout → clean logout + re-login prompt (fired by the data layer on an expired JWT).
   window.addEventListener('codev:session-expired', () => {
     renderAuthArea();
