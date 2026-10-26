@@ -409,7 +409,7 @@
           <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Participation from (₦)</label><input name="priceFrom" type="number" min="0" value="${(p.priceFrom === 0 || p.priceFrom) ? p.priceFrom : ''}"></div>
             <div class="field" style="flex:1"><label>Construction stage</label><select name="stage">${CFG.STAGES.map(x => `<option ${x === p.stage ? 'selected' : ''}>${x}</option>`).join('')}</select></div></div>
           <div class="spread" style="margin:6px 0 4px"><label style="margin:0">Construction schedule &amp; milestones</label><button type="button" class="btn sm" onclick="CODEVAPP.addEditMs()">+ Phase</button></div>
-          <div style="overflow-x:auto"><table style="font-size:14px;width:100%"><thead><tr><th style="text-align:left">Phase</th><th style="text-align:left">%</th><th style="text-align:left">Target date</th><th style="text-align:left">Certification</th><th></th></tr></thead><tbody id="editMsRows">${editMsHtml()}</tbody></table></div>
+          <div id="editMsRows" class="ms-list">${editMsHtml()}</div>
           <p class="tiny muted" style="margin:6px 0 0">You set the schedule (name, % of funds released at each phase, target date). <b>Certification is done by CoDev</b> — editing the schedule marks it for re-certification. Buyer payment calls are managed under <a href="#/deals/${p.id}">Deals</a>.</p>
           <div class="row" style="gap:10px;margin-top:14px"><button class="btn primary">Save changes</button><a class="btn" href="${back}">Cancel</a></div>
         </form>`);
@@ -485,13 +485,14 @@
   // ---- Developer: full "Edit listing" (own listings only) ----
   let editMs = [], editListingPid = null, editMsDirty = false;
   function editMsRowHtml(m, i) { const lbl = (CFG.MILESTONE_STATUS_LABELS && CFG.MILESTONE_STATUS_LABELS[m.status]) || m.status || 'pending';
-    return `<tr class="subrow">
-      <td><input value="${esc(m.name || '')}" onchange="CODEVAPP.editMsSet(${i},'name',this.value)"></td>
-      <td style="width:70px"><input type="number" min="0" max="100" value="${(m.pct === 0 || m.pct) ? m.pct : 0}" onchange="CODEVAPP.editMsSet(${i},'pct',Number(this.value))"></td>
-      <td style="width:150px"><input type="date" value="${esc(m.targetDate || '')}" onchange="CODEVAPP.editMsSet(${i},'targetDate',this.value)"></td>
-      <td style="width:120px"><span class="tiny muted">${esc(lbl)}</span></td>
-      <td><button type="button" class="btn ghost sm" onclick="CODEVAPP.delEditMs(${i})">✕</button></td></tr>`; }
-  function editMsHtml() { return (editMs || []).map((m, i) => editMsRowHtml(m, i)).join('') || `<tr><td colspan="5" class="tiny muted">No milestones — add a phase.</td></tr>`; }
+    return `<div class="ms-item">
+      <div class="ms-f ms-name"><label>Phase</label><input value="${esc(m.name || '')}" placeholder="e.g. Foundation" onchange="CODEVAPP.editMsSet(${i},'name',this.value)"></div>
+      <div class="ms-f ms-pct"><label>% released</label><input type="number" inputmode="numeric" min="0" max="100" value="${(m.pct === 0 || m.pct) ? m.pct : 0}" onchange="CODEVAPP.editMsSet(${i},'pct',Number(this.value))"></div>
+      <div class="ms-f ms-date"><label>Target date</label><input type="date" value="${esc(m.targetDate || '')}" onchange="CODEVAPP.editMsSet(${i},'targetDate',this.value)"></div>
+      <div class="ms-f ms-cert"><label>Certification</label><span class="ms-badge">${esc(lbl)}</span></div>
+      <button type="button" class="btn ghost sm ms-del" aria-label="Remove phase" onclick="CODEVAPP.delEditMs(${i})">✕ Remove</button>
+    </div>`; }
+  function editMsHtml() { return (editMs || []).map((m, i) => editMsRowHtml(m, i)).join('') || `<div class="tiny muted" style="padding:6px 2px">No milestones — add a phase.</div>`; }
   function renderEditMs() { const b = document.getElementById('editMsRows'); if (b) b.innerHTML = editMsHtml(); }
   function addEditMs() { editMsDirty = true; editMs.push({ name: '', pct: 0, status: 'pending', targetDate: '', releasedDate: '' }); renderEditMs(); }
   function editMsSet(i, k, v) { editMsDirty = true; if (editMs[i]) editMs[i][k] = v; }

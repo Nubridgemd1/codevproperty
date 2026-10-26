@@ -122,3 +122,20 @@ tr:hover td{background:var(--soft);}
 .lb-close:hover,.lb-nav:hover{background:var(--bronze);border-color:var(--bronze)}
 .lb-count{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);color:#fff;font-size:13px;background:rgba(0,0,0,.45);padding:5px 13px;border-radius:20px;}
 @media(max-width:600px){.lb-nav{width:46px;height:46px;font-size:26px;}.lb-prev{left:8px}.lb-next{right:8px}.lb-close{top:10px;right:12px;}}
+
+/* Developer "Edit listing" — milestone/schedule editor (responsive: iOS/Android/desktop) */
+.ms-list{display:flex;flex-direction:column;gap:10px;margin:4px 0 2px;}
+.ms-item{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 12px;border:1px solid var(--line);border-radius:11px;padding:12px 13px;background:var(--soft);}
+.ms-f{display:flex;flex-direction:column;gap:4px;min-width:0;}
+.ms-f label{margin:0;font-size:11px;}
+.ms-f input{width:100%;padding:9px 11px;max-width:100%;}
+.ms-name{flex:1 1 190px;}
+.ms-pct{flex:0 1 110px;}
+.ms-date{flex:1 1 160px;}
+.ms-cert{flex:0 1 130px;}
+.ms-badge{display:inline-flex;align-items:center;align-self:flex-start;font-size:11px;font-weight:700;letter-spacing:.03em;padding:6px 10px;border-radius:999px;background:#f6edda;color:var(--amber);white-space:nowrap;}
+.ms-del{flex:0 0 auto;margin-left:auto;align-self:flex-end;white-space:nowrap;}
+@media(max-width:620px){
+  .ms-f{flex:1 1 100% !important;}
+  .ms-del{width:100%;margin-left:0;text-align:center;}
+}
