@@ -11,7 +11,7 @@
 <meta name="robots" content="noindex, nofollow" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<link rel="stylesheet" href="styles.css?v=30" />
+<link rel="stylesheet" href="styles.css?v=32" />
 <style>
   body{background:var(--soft)}
   .adminbar{background:var(--navy);color:#fff}.adminbar .logo{border-color:var(--bronze2);color:#fff}.adminbar .brand b{color:#fff}
@@ -26,6 +26,18 @@
   .ph-thumb .cover-badge{position:absolute;top:4px;left:4px;background:var(--bronze);color:#fff;font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:20px;z-index:2}
   .ph-thumb .mkcover{position:absolute;top:4px;left:4px;right:auto;width:22px;height:22px;border-radius:50%;border:none;background:rgba(15,34,51,.72);color:#fff;font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;z-index:2}
   .ph-thumb .mkcover:hover{background:var(--bronze)}
+  /* Responsive admin tables — stack into cards on mobile so Status + Review/Actions are always visible & tappable */
+  @media(max-width:640px){
+    .rtable,.rtable thead,.rtable tbody,.rtable tr,.rtable th,.rtable td{display:block;width:auto}
+    .rtable thead{display:none}
+    .rtable tr{border:1px solid var(--line);border-radius:10px;margin:0 0 10px;padding:4px 2px;background:#fff}
+    .rtable tr:last-child{margin-bottom:0}
+    .rtable td{border:none !important;padding:6px 13px;text-align:left !important}
+    .rtable td:last-child{padding-top:8px}
+    .rtable td:last-child .btn{width:100%}
+    .rtable td[style*="text-align:right"]{text-align:left !important}
+    .rtable td[colspan]{text-align:center !important}
+  }
 </style>
 </head>
 <body>
@@ -50,7 +62,7 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=30"></script>
+<script src="data.js?v=33"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
@@ -173,7 +185,7 @@
       <td style="text-align:right"><button class="btn sm navy" onclick="ADMIN.reviewQ('${q.id}')">Review</button></td></tr>`).join('');
     return `<div class="card pad" style="margin-bottom:16px"><div class="grid g4">${mx.map(m=>`<div class="stat"><div class="n">${m[1]}</div><div class="l">${m[0]}</div></div>`).join('')}</div>
       <p class="tiny muted" style="margin:12px 0 0">CoDev delivers <b>qualified capital, not leads</b> — verify identity, KYC/AML, intent, capacity and source of funds before granting Deal Room access.</p></div>
-      <div class="card" style="overflow:hidden"><table><thead><tr><th>Investor</th><th>Development</th><th>Amount / capacity</th><th>Readiness / funds</th><th>Status</th><th></th></tr></thead>
+      <div class="card" style="overflow-x:auto"><table class="rtable"><thead><tr><th>Investor</th><th>Development</th><th>Amount / capacity</th><th>Readiness / funds</th><th>Status</th><th></th></tr></thead>
       <tbody>${rows||`<tr><td colspan="6" class="muted tiny" style="padding:16px">No qualifications yet. They appear here when an investor completes the qualification form on a development.</td></tr>`}</tbody></table></div>`;
   }
   function reviewQ(id){ const q=QUALS.find(x=>x.id===id); if(!q) return; QEDIT=id;
@@ -231,7 +243,7 @@
     return `<div class="card pad" style="margin-bottom:16px"><div class="grid g4">${mx.map(m=>`<div class="stat"><div class="n">${m[1]}</div><div class="l">${m[0]}</div></div>`).join('')}</div>
       <p class="tiny muted" style="margin:12px 0 0">Expressions of interest are captured <b>before</b> any account exists. Review each applicant, then approve &amp; invite, request more information, or decline — submitting an EOI never creates an account.</p></div>
       <div class="tabs" style="margin-bottom:12px">${fbtn('all','All')}${fbtn('developer','Developers')}${fbtn('buyer','Buyers')}</div>
-      <div class="card" style="overflow:hidden"><table><thead><tr><th>Applicant</th><th>Type</th><th>Ref / date</th><th>Status</th><th></th></tr></thead>
+      <div class="card" style="overflow-x:auto"><table class="rtable"><thead><tr><th>Applicant</th><th>Type</th><th>Ref / date</th><th>Status</th><th></th></tr></thead>
       <tbody>${rows||`<tr><td colspan="5" class="muted tiny" style="padding:16px">No applications yet. They appear here when a developer or buyer submits an expression of interest on the website.</td></tr>`}</tbody></table></div>`;
   }
   function eoiFilter(k){ EOIFILTER=k; $('#panel').innerHTML=applicationsPanel(); }
@@ -423,7 +435,7 @@
       <div class="field" style="margin:0;flex:1;min-width:200px"><input id="pSearch" type="search" placeholder="Search title, developer, lister or status…" oninput="ADMIN.filterProps()" aria-label="Search listings"></div>
       ${can('manage_listings')?`<button class="btn primary sm" onclick="ADMIN.newProp()">+ New listing</button>`:''}
       <span id="pCount" class="small muted">${n} listing${n===1?'':'s'}</span></div>
-      <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Property</th><th>Lister</th><th>Assigned to</th><th>From / Stage</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+      <div class="card"><div style="overflow-x:auto"><table class="rtable"><thead><tr><th>Property</th><th>Lister</th><th>Assigned to</th><th>From / Stage</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
       <tbody id="propRows">${propRowsHtml(PROPS)}</tbody></table></div></div>
       <p class="tiny muted" style="margin-top:10px">Verify to publish. “Edit · milestones” lets you modify details, the milestone timeline and payments. Listings come from developers and property owners alike.</p>`;
   }

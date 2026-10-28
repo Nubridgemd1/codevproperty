@@ -129,7 +129,17 @@ window.CODEV = (function () {
     submittedBy: r.submitted_by_email, submittedByRole: r.submitted_by_role, createdAt: r.created_at, verifiedAt: r.verified_at,
     assignedTo: r.assigned_to_email || '', assignedToId: r.assigned_to || '', assignedBy: r.assigned_by || '', assignedAt: r.assigned_at || null,
     milestones: Array.isArray(r.milestones) ? r.milestones : [], payments: Array.isArray(r.payments) ? r.payments : [],
-    images: Array.isArray(r.images) ? r.images : [] });
+    // Full queries return the whole `images` array; lightweight card queries return only `cover` (images->0).
+    images: Array.isArray(r.images) ? r.images : (r.cover != null ? [r.cover] : []) });
+
+  // Card lists only render the cover image, so they fetch every scalar column plus just the first
+  // image (cover:images->0) instead of select=* — which would pull every base64 photo of every
+  // listing and stall the page. Falls back to select=* if a named column is missing (older schema).
+  const PROP_CARD_COLS = 'id,ref,title,developer,location,address,property_type,bedrooms,price,property_items,units,delivery_date,summary,price_from,stage,status,sold,sold_at,legal_status,legal_reviewed_at,submitted_by_email,submitted_by_role,created_at,verified_at,assigned_to_email,assigned_to,assigned_by,assigned_at,milestones,payments,cover:images->0';
+  async function propCards(query, opts) {
+    try { return (await sb('/rest/v1/properties?' + query + '&select=' + PROP_CARD_COLS, opts)).map(toProp); }
+    catch (e) { return (await sb('/rest/v1/properties?' + query + '&select=*', opts)).map(toProp); }
+  }
 
   const toDoc = (r) => ({ id: r.id, propertyId: r.property_id, key: r.doc_key, label: r.doc_label,
     fileData: r.file_data || '', fileName: r.file_name || '', fileType: r.file_type || '',
@@ -199,8 +209,8 @@ window.CODEV = (function () {
 
   const sbDB = {
     properties: {
-      async listPublic() { return (await sb('/rest/v1/properties?status=eq.verified&order=created_at.desc&select=*', { anon: true })).map(toProp); },
-      async listMine() { const s = getSession(); if (!s) return []; return (await sb('/rest/v1/properties?submitted_by=eq.' + s.user.id + '&order=created_at.desc&select=*')).map(toProp); },
+      async listPublic() { return propCards('status=eq.verified&order=created_at.desc', { anon: true }); },
+      async listMine() { const s = getSession(); if (!s) return []; return propCards('submitted_by=eq.' + s.user.id + '&order=created_at.desc'); },
       async listAll() { return (await sb('/rest/v1/properties?order=created_at.desc&select=*')).map(toProp); },
       async byId(id) { const r = await sb('/rest/v1/properties?id=eq.' + id + '&select=*', { anon: true }); return r && r[0] ? toProp(r[0]) : null; },
       async add(p) { const s = getSession();
@@ -281,6 +291,8 @@ window.CODEV = (function () {
     },
     profiles: {
       async listAll() { return (await sb('/rest/v1/profiles?order=created_at.desc&select=*')).map(toAcc); },
+      // Lightweight: just the roles, for home-page counts (avoids pulling every profile's base64 brochure/docs).
+      async listRoles() { return (await sb('/rest/v1/profiles?select=role')).map(r => r.role || ''); },
       async byId(id) { return fetchProfile(id); },
       async add({ name, email, role, password }) {
         // Pre-approve this email so the (optional) invitation-only signup gate allows the
@@ -493,6 +505,7 @@ window.CODEV = (function () {
     },
     profiles: {
       async listAll() { return rd(L.acc, []); },
+      async listRoles() { return rd(L.acc, []).map(a => a.role || ''); },
       async byId(id) { return rd(L.acc, []).find(a => a.id === id); },
       async add({ name, email, role, password }) { const list = rd(L.acc, []); if (list.some(a => a.email.toLowerCase() === email.toLowerCase())) throw new Error('Email exists'); const a = { id: uid(), name, email, role, status: 'active', pass: H(password || 'changeme'), createdAt: nowISO() }; list.push(a); wr(L.acc, list); return a; },
       async update(id, patch) { const list = rd(L.acc, []); const i = list.findIndex(a => a.id === id); if (i < 0) return; list[i] = { ...list[i], ...patch }; wr(L.acc, list); return list[i]; },

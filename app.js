@@ -937,7 +937,7 @@
     app.innerHTML = loading();
     try {
       const u = me();
-      if (path === '' || path === undefined) { const opps = await db.properties.listPublic(); let devs = 0, inv = 0; try { const accs = CFG.configured ? await db.profiles.listAll() : []; devs = accs.filter(a => a.role === 'developer').length; inv = accs.filter(a => a.role === 'investor').length; } catch {} app.innerHTML = V.home(opps, { opps: opps.length, devs: devs || '—', investors: inv || '—' }); }
+      if (path === '' || path === undefined) { const opps = await db.properties.listPublic(); let devs = 0, inv = 0; try { const roles = CFG.configured ? await db.profiles.listRoles() : []; devs = roles.filter(r => r === 'developer').length; inv = roles.filter(r => r === 'investor').length; } catch {} app.innerHTML = V.home(opps, { opps: opps.length, devs: devs || '—', investors: inv || '—' }); }
       else if (path === 'opportunities') app.innerHTML = V.opportunities(await db.properties.listPublic());
       else if (path === 'opp') { const p = await db.properties.byId(arg); const dstat = p ? await db.documents.statusForProperty(arg) : []; app.innerHTML = V.opp(p, dstat); }
       else if (path === 'docs') { const p = await db.properties.byId(arg); let docs = [], queries = [], report = null;
