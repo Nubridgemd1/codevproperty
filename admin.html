@@ -62,7 +62,7 @@
 <div class="toast" id="toast"></div>
 <div class="modal-bg" id="modal"><div class="modal wide"><div class="spread" style="margin-bottom:14px"><h3 id="mTitle" style="margin:0">Edit</h3><button class="btn ghost sm" onclick="ADMIN.closeModal()">✕</button></div><div id="mBody"></div></div></div>
 
-<script src="data.js?v=33"></script>
+<script src="data.js?v=34"></script>
 <script>
 (function(){
   const { CFG, auth, db, fmtN, esc } = window.CODEV;
@@ -611,6 +611,7 @@
       <td><span class="badge ${badgeCls(a.status)}">${esc(a.status||'pending')}</span></td>
       <td class="tiny muted">${a.createdAt?new Date(a.createdAt).toLocaleDateString():''}</td>
       <td style="white-space:nowrap;text-align:right">${a.role==='developer'?`<button class="btn ghost sm" onclick="ADMIN.viewDev('${a.id}')">Profile</button> `:''}${acctActions(a)}
+        ${(canA && a.role!=='admin')?`<button class="btn ghost sm" onclick="ADMIN.editAcctEmail('${a.id}')" title="Correct the sign-in email & resend">✎ Email</button> `:''}
         ${(canA && a.role!=='admin')?`<button class="btn ghost sm" onclick="ADMIN.delAcc('${a.id}')">🗑</button>`:''}</td></tr>`).join('');
     return `<div class="spread" style="margin-bottom:12px"><h3 style="margin:0;font-size:18px">Accounts</h3>${canA?'<button class="btn primary sm" onclick="ADMIN.addAcc()">+ Add account</button>':''}</div>
       <div class="card"><div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
@@ -712,6 +713,29 @@
       const newId=d && d.user && d.user.id; if(newId && CFG.configured){ try{ await db.profiles.update(newId,{role,name:f.name.value.trim(),status:'approved'}); }catch{} }
       closeModal(); toast('Account created'); await load();
     }catch(err){ toast(err.message||'Could not create'); } return false; }
+  // Correct a registered account holder's sign-in email (e.g. created with the wrong address) and re-notify.
+  function editAcctEmail(id){ const a=ACCS.find(x=>x.id===id)||{}; $('#mTitle').textContent='Change account email';
+    $('#mBody').innerHTML=`<form onsubmit="return ADMIN.saveAcctEmail(event,'${id}')">
+      <div class="card pad" style="background:var(--soft);margin-bottom:12px"><b>${esc(a.name||a.email||'Account')}</b>
+        <div class="tiny muted">Current email: ${esc(a.email||'—')} &middot; Role: ${esc(a.role||'—')}</div></div>
+      <div class="field"><label>Correct email address</label><input name="email" type="email" required value="${esc(a.email||'')}" placeholder="correct@email.com" autofocus></div>
+      <label class="row" style="gap:8px;align-items:flex-start;margin:2px 0 10px"><input type="checkbox" name="notify" checked>
+        <span class="tiny">Email the new address to confirm the change and how to sign in / set a password.</span></label>
+      <button class="btn primary" style="width:100%">Update email &amp; resend</button>
+      <p class="tiny muted" style="margin-top:8px">This updates the account holder&rsquo;s <b>sign-in email</b> and profile. They can then sign in with the correct address &mdash; using &ldquo;Forgot password&rdquo; to set a password. Works for accounts already activated.</p></form>`;
+    $('#modal').classList.add('show'); }
+  async function saveAcctEmail(e,id){ e.preventDefault(); const f=e.target; const email=(f.email.value||'').trim(); const notify=!!f.notify.checked;
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('Please enter a valid email address'); return false; }
+    const btn=f.querySelector('button'); btn.disabled=true; btn.textContent='Updating…';
+    try{ await db.profiles.updateEmail(id,email,notify); closeModal(); toast('Email updated to '+email+(notify?' — new address notified':'')); await load(); }
+    catch(err){ const m=(err&&err.message)||'';
+      if(/admin_update_account_email|could not find the function|function .* does not exist|schema cache|PGRST202|rpc|\(404\)/i.test(m)){
+        toast('One-time setup needed: run ACCOUNT-EMAIL-UPDATE.sql in the Supabase SQL editor, then try again.'); }
+      else if(/already in use/i.test(m)){ toast(m); }
+      else if(/not authorised|admin only/i.test(m)){ toast('Only a SuperAdmin can change account emails.'); }
+      else { toast(m||'Could not update email'); }
+      btn.disabled=false; btn.textContent='Update email & resend'; }
+    return false; }
   async function setRole(id,role){ try{ await db.profiles.update(id,{role}); toast('Role updated'); await load(); }catch(err){toast(err.message);} }
   async function toggleStatus(id,cur){ try{ await db.profiles.update(id,{status:cur==='active'?'suspended':'active'}); toast('Account '+(cur==='active'?'suspended':'activated')); await load(); }catch(err){toast(err.message);} }
   async function setAcctStatus(id,s){ try{ await db.profiles.update(id,{status:s}); toast(s==='approved'?'Account approved — access granted':('Account '+s)); await load(); }catch(err){toast(err.message);} }
@@ -738,7 +762,7 @@
     $('#modal').classList.add('show'); }
 
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,setSold,copyRef,onTypeChange,addItem,delItem,itemSet,itemSize,reviewDoc,uploadDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,txSetUnit,txAddPay,txPaySet,txDelPay,admAccess,delProp,editProp,saveProp,newProp,createProp,itemCoords,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,setRole,toggleStatus,setAcctStatus,delAcc,viewDev,openDevFile,openDevExtra,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+  window.ADMIN={login,lock,tab,setStatus,setSold,copyRef,onTypeChange,addItem,delItem,itemSet,itemSize,reviewDoc,uploadDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,txSetUnit,txAddPay,txPaySet,txDelPay,admAccess,delProp,editProp,saveProp,newProp,createProp,itemCoords,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,editAcctEmail,saveAcctEmail,setRole,toggleStatus,setAcctStatus,delAcc,viewDev,openDevFile,openDevExtra,closeModal,forgot,backToLogin,forgotSend,forgotReset,
     addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps,
     loadApplications,reviewEoi,eoiFilter,saveEoi};
 

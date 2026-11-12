@@ -302,6 +302,10 @@ window.CODEV = (function () {
         return sb('/auth/v1/signup', { method: 'POST', anon: true, body: { email, password, data: { name, role } } });
       },
       async update(id, patch) { return sb('/rest/v1/profiles?id=eq.' + id, { method: 'PATCH', body: patch, prefer: 'return=representation' }); },
+      // Admin corrects a registered account holder's sign-in email (auth.users + profile)
+      // and optionally re-notifies the new address. Server-side RPC (ACCOUNT-EMAIL-UPDATE.sql),
+      // admin-gated — the anon/client key cannot change auth.users directly.
+      async updateEmail(id, email, notify) { return sb('/rest/v1/rpc/admin_update_account_email', { method: 'POST', body: { p_user: id, p_email: email, p_notify: notify !== false } }); },
       // Signed-in user edits their OWN profile (developer profile & brochure). A DB guard trigger
       // stops non-admins from changing role/status/permissions, so only safe fields take effect.
       async updateMine(patch) { const s = getSession(); if (!s) throw new Error('Not signed in');
@@ -509,6 +513,7 @@ window.CODEV = (function () {
       async byId(id) { return rd(L.acc, []).find(a => a.id === id); },
       async add({ name, email, role, password }) { const list = rd(L.acc, []); if (list.some(a => a.email.toLowerCase() === email.toLowerCase())) throw new Error('Email exists'); const a = { id: uid(), name, email, role, status: 'active', pass: H(password || 'changeme'), createdAt: nowISO() }; list.push(a); wr(L.acc, list); return a; },
       async update(id, patch) { const list = rd(L.acc, []); const i = list.findIndex(a => a.id === id); if (i < 0) return; list[i] = { ...list[i], ...patch }; wr(L.acc, list); return list[i]; },
+      async updateEmail(id, email) { const list = rd(L.acc, []); if (list.some(a => a.id !== id && (a.email || '').toLowerCase() === String(email).toLowerCase())) throw new Error('That email is already in use by another account'); const i = list.findIndex(a => a.id === id); if (i < 0) throw new Error('Account not found'); list[i] = { ...list[i], email }; wr(L.acc, list); return list[i]; },
       async updateMine(patch) { const s = rd(L.sess, null); if (!s) throw new Error('Not signed in'); const safe = {}; ['name', 'about', 'website', 'phone', 'brochure', 'reg_number', 'year_established', 'hq_address', 'company_profile_doc', 'cac_doc', 'references_doc', 'dev_extras'].forEach(k => { if (k in patch) safe[k] = patch[k]; }); const list = rd(L.acc, []); const i = list.findIndex(a => a.id === s.id); if (i >= 0) { list[i] = { ...list[i], ...safe }; wr(L.acc, list); } if (safe.name) { s.name = safe.name; wr(L.sess, s); } return list[i]; },
       async remove(id) { wr(L.acc, rd(L.acc, []).filter(a => a.id !== id)); },
     },
