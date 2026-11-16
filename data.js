@@ -130,7 +130,8 @@ window.CODEV = (function () {
     assignedTo: r.assigned_to_email || '', assignedToId: r.assigned_to || '', assignedBy: r.assigned_by || '', assignedAt: r.assigned_at || null,
     milestones: Array.isArray(r.milestones) ? r.milestones : [], payments: Array.isArray(r.payments) ? r.payments : [],
     // Full queries return the whole `images` array; lightweight card queries return only `cover` (images->0).
-    images: Array.isArray(r.images) ? r.images : (r.cover != null ? [r.cover] : []) });
+    images: Array.isArray(r.images) ? r.images : (r.cover != null ? [r.cover] : []),
+    video: r.video || '' });
 
   // Card lists only render the cover image, so they fetch every scalar column plus just the first
   // image (cover:images->0) instead of select=* — which would pull every base64 photo of every
@@ -231,12 +232,13 @@ window.CODEV = (function () {
           ref: p.ref || makeListingRef() }; // unique reference assigned at submission (before admin verification)
         if (assignTo) { extra.assigned_to = assignTo.id; extra.assigned_to_email = assignTo.email;
           extra.assigned_by = (s.user && s.user.email) || null; extra.assigned_at = nowISO(); }
-        const withAll = Object.assign({}, row, extra, { images: p.images || [] });
+        const withAll = Object.assign({}, row, extra, { images: p.images || [], video: p.video || null });
         try { return await sb('/rest/v1/properties', { method: 'POST', body: withAll, prefer: 'return=representation' }); }
-        catch (e) { // Degrade gracefully if the DB is missing newer columns (images / address / property_type / units / delivery_date).
-          const msg = (e && e.message) || ''; if (!/images|address|property_type|units|delivery_date|column|schema cache/i.test(msg)) throw e;
+        catch (e) { // Degrade gracefully if the DB is missing newer columns (images / video / address / property_type / units / delivery_date).
+          const msg = (e && e.message) || ''; if (!/images|video|address|property_type|units|delivery_date|column|schema cache/i.test(msg)) throw e;
           const body = Object.assign({}, row);
           if (/images/i.test(msg)) CFG.imagesUnavailable = true; else body.images = p.images || [];
+          if (/video/i.test(msg)) CFG.videoUnavailable = true; else body.video = p.video || null;
           if (/address|property_type|units|delivery_date|column|schema cache/i.test(msg)) CFG.listingFieldsUnavailable = true; else Object.assign(body, extra);
           return sb('/rest/v1/properties', { method: 'POST', body: body, prefer: 'return=representation' }); } },
       async update(id, patch) { const row = {};
@@ -246,6 +248,7 @@ window.CODEV = (function () {
         if ('status' in patch) row.status = patch.status; if ('verifiedAt' in patch) row.verified_at = patch.verifiedAt;
         if ('milestones' in patch) row.milestones = patch.milestones; if ('payments' in patch) row.payments = patch.payments;
         if ('images' in patch) row.images = patch.images;
+        if ('video' in patch) row.video = patch.video || null;
         const newKeys = [];
         if ('ref' in patch) { row.ref = patch.ref || null; newKeys.push('ref'); }
         if ('address' in patch) { row.address = patch.address || null; newKeys.push('address'); }
@@ -285,7 +288,8 @@ window.CODEV = (function () {
         p_price_from: (d.priceFrom === '' || d.priceFrom == null) ? null : Number(d.priceFrom),
         p_items: Array.isArray(d.items) ? d.items : null,
         p_images: Array.isArray(d.images) ? d.images : null,
-        p_milestones: Array.isArray(d.milestones) ? d.milestones : null
+        p_milestones: Array.isArray(d.milestones) ? d.milestones : null,
+        p_video: (d.video == null) ? null : d.video
       } }); },
       async remove(id) { return sb('/rest/v1/properties?id=eq.' + id, { method: 'DELETE' }); },
     },

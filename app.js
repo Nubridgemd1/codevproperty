@@ -268,6 +268,7 @@
         <div class="grid g2" style="margin-top:14px;align-items:start">
           <div class="card" style="overflow:hidden"><div class="ph${p.images && p.images.length ? ' clickable' : ''}" style="height:240px;${coverBg(p)}position:relative"${p.images && p.images.length ? ` onclick="CODEVAPP.openLightbox(0)" title="Click to enlarge"` : ''}>${p.images && p.images.length ? '<span class="lb-hint">🔍 Click to enlarge</span>' : ''}</div>
             ${p.images && p.images.length > 1 ? `<div class="photo-grid" style="padding:10px 10px 0">${p.images.map((d, i) => `<div class="ph-thumb clickable" onclick="CODEVAPP.openLightbox(${i})" title="Click to enlarge"><img src="${d}" alt="Development photo ${i + 1}"></div>`).join('')}</div>` : ''}
+            ${p.video ? `<div style="padding:12px 12px 0"><div class="tiny muted" style="margin:0 0 7px;font-weight:600">🎥 Video walkthrough</div>${videoEmbed(p.video)}</div>` : ''}
             <div style="padding:18px"><h3 style="margin:0 0 10px;font-size:17px">Construction schedule &amp; timeline</h3>
               <table style="margin-top:4px;font-size:13px"><thead><tr><th>Phase</th><th>%</th><th>Target</th></tr></thead><tbody>
               ${ms.map(m => `<tr><td>${esc(m.name)}</td><td>${m.pct}%</td><td class="tiny muted">${esc(m.targetDate || '—')}</td></tr>`).join('') || `<tr><td colspan="3" class="muted tiny">No schedule set.</td></tr>`}
@@ -297,7 +298,7 @@
             <p class="tiny muted" style="margin-top:8px">Complete a short investor qualification. CoDev verifies applicants before granting Deal Room access to confidential project documents.</p>`}</div></div></section>`; },
     how() { const steps = [['List', 'A developer or property owner submits a development or plot.'], ['Verify', 'Admin reviews and verifies the listing before it goes public.'], ['Co-develop', 'Investors browse verified opportunities and express interest.'], ['Govern', 'Milestone-based structure with timelines & payments; funds are released through licensed escrow partners against verified construction milestones.']];
       return sec('How it works', 'From listing to verification to co-development.', `<div class="grid g2">${steps.map((s, i) => `<div class="card pad row" style="gap:14px;align-items:flex-start"><span class="step-n">${i + 1}</span><div><h3 style="margin:0 0 4px;font-size:18px">${s[0]}</h3><p class="small muted" style="margin:0">${s[1]}</p></div></div>`).join('')}</div>`); },
-    list(u, mine) { listingPhotos = []; listingItems = [{ type: '', bedrooms: '', landSqm: '', landSqft: '', coords: '', units: '', price: '' }]; listingDocs = {};
+    list(u, mine) { listingPhotos = []; listingVideo = ''; listingItems = [{ type: '', bedrooms: '', landSqm: '', landSqft: '', coords: '', units: '', price: '' }]; listingDocs = {};
       return sec('List a property', 'Developers and property owners can list here. Submissions are verified by admin before they go public.',
       `<div class="grid g2" style="align-items:start">
         <form class="card pad" onsubmit="return CODEVAPP.submitProperty(event)">
@@ -317,6 +318,10 @@
           <div class="field"><label>Photos <span class="tiny muted">— up to ${MAX_PHOTOS}, from your phone or computer</span></label>
             <label class="photo-drop"><input type="file" accept="image/*,.heic,.heif" multiple onchange="CODEVAPP.addPhotos(this)"><span class="pd-inner">📷 Tap to add photos or take a picture</span></label>
             <div id="photoPreviews" class="photo-grid"></div></div>
+          <div class="field"><label>Video walkthrough <span class="tiny muted">— optional: paste a YouTube / Vimeo link, or upload a short clip</span></label>
+            <input type="url" id="videoUrl" placeholder="https://youtube.com/watch?v=…   or   https://vimeo.com/…" oninput="CODEVAPP.setVideoUrl(this.value)">
+            <label class="photo-drop" style="margin-top:8px"><input type="file" accept="video/*" onchange="CODEVAPP.addVideo(this)"><span class="pd-inner">🎥 Or upload a video clip (max 20MB)</span></label>
+            <div id="videoPreview"></div></div>
           <div class="field"><label>Assurance documents <span class="tiny muted">— attach the key documents for CoDev legal review (you can also add or replace them later)</span></label>
             <div id="listingDocsBox" class="grid" style="gap:8px">${listingDocsHtml()}</div></div>
           <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Participation from (₦)</label><input name="priceFrom" type="number" min="0" required></div>
@@ -385,6 +390,7 @@
       if (!isOwner) return sec('', '', `<a class="small muted" href="${back}">← Back</a>${empty('You can only edit your own listings.')}`);
       editListingPid = p.id; editMsDirty = false;
       listingPhotos = JSON.parse(JSON.stringify(p.images || []));
+      listingVideo = p.video || '';
       listingItems = (p.items && p.items.length) ? JSON.parse(JSON.stringify(p.items)) : [{ type: '', bedrooms: '', landSqm: '', landSqft: '', coords: '', units: '', price: '' }];
       editMs = JSON.parse(JSON.stringify(p.milestones || []));
       return sec('', '', `<a class="small muted" href="${back}">← Back to my listings</a>
@@ -406,6 +412,10 @@
           <div class="field"><label>Photos <span class="tiny muted">— up to ${MAX_PHOTOS}</span></label>
             <label class="photo-drop"><input type="file" accept="image/*,.heic,.heif" multiple onchange="CODEVAPP.addPhotos(this)"><span class="pd-inner">📷 Add photos or take a picture</span></label>
             <div id="photoPreviews" class="photo-grid">${listingPhotos.map((d, i) => `<div class="ph-thumb"><img src="${d}" alt="photo ${i + 1}"><button type="button" aria-label="Remove photo" onclick="CODEVAPP.removePhoto(${i})">✕</button></div>`).join('')}</div></div>
+          <div class="field"><label>Video walkthrough <span class="tiny muted">— optional: paste a YouTube / Vimeo link, or upload a short clip</span></label>
+            <input type="url" id="videoUrl" placeholder="https://youtube.com/…   or   https://vimeo.com/…" value="${listingVideo && !isDataUrl(listingVideo) ? esc(listingVideo) : ''}" oninput="CODEVAPP.setVideoUrl(this.value)">
+            <label class="photo-drop" style="margin-top:8px"><input type="file" accept="video/*" onchange="CODEVAPP.addVideo(this)"><span class="pd-inner">🎥 ${listingVideo ? 'Replace video' : 'Upload a video clip (max 20MB)'}</span></label>
+            <div id="videoPreview">${videoPreviewHtml()}</div></div>
           <div class="row" style="gap:12px"><div class="field" style="flex:1"><label>Participation from (₦)</label><input name="priceFrom" type="number" min="0" value="${(p.priceFrom === 0 || p.priceFrom) ? p.priceFrom : ''}"></div>
             <div class="field" style="flex:1"><label>Construction stage</label><select name="stage">${CFG.STAGES.map(x => `<option ${x === p.stage ? 'selected' : ''}>${x}</option>`).join('')}</select></div></div>
           <div class="spread" style="margin:6px 0 4px"><label style="margin:0">Construction schedule &amp; milestones</label><button type="button" class="btn sm" onclick="CODEVAPP.addEditMs()">+ Phase</button></div>
@@ -501,7 +511,7 @@
     const btn = f.querySelector('button[type=submit],button:not([type])'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     const d = { title: f.title.value.trim(), location: f.location.value.trim(), address: f.address.value.trim(),
       items: (listingItems || []).filter(it => it.type), units: f.units.value, deliveryDate: f.deliveryDate.value,
-      summary: f.summary.value.trim(), priceFrom: f.priceFrom.value, stage: f.stage.value, images: listingPhotos.slice() };
+      summary: f.summary.value.trim(), priceFrom: f.priceFrom.value, stage: f.stage.value, images: listingPhotos.slice(), video: listingVideo || '' };
     if (editMsDirty) d.milestones = (editMs || []).map(m => ({ name: m.name || '', pct: Number(m.pct) || 0, targetDate: m.targetDate || '' }));
     try { await db.properties.updateDetails(editListingPid, d); toast('Listing updated'); location.hash = (me() && me().role === 'developer') ? '#/developer' : '#/account'; route(); }
     catch (err) { toast((err && err.message) || 'Could not update listing'); if (btn) { btn.disabled = false; btn.textContent = 'Save changes'; } }
@@ -653,9 +663,34 @@
   function renderPhotoPreviews() { const box = document.getElementById('photoPreviews'); if (!box) return;
     box.innerHTML = listingPhotos.map((d, i) => `<div class="ph-thumb"><img src="${d}" alt="photo ${i + 1}"><button type="button" aria-label="Remove photo" onclick="CODEVAPP.removePhoto(${i})">✕</button></div>`).join(''); }
 
+  // ---- listing video: a pasted YouTube/Vimeo link OR a short uploaded clip (data URL) ----
+  let listingVideo = '';
+  const MAX_VIDEO_MB = 20;
+  function isDataUrl(s) { return typeof s === 'string' && s.indexOf('data:') === 0; }
+  // Render a video for the public page / the form preview: embed for YouTube & Vimeo, a <video> player otherwise.
+  function videoEmbed(v) {
+    if (!v) return '';
+    const yt = v.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
+    const vim = v.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    const src = yt ? 'https://www.youtube.com/embed/' + yt[1] : vim ? 'https://player.vimeo.com/video/' + vim[1] : '';
+    if (src) return `<div style="position:relative;width:100%;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#000"><iframe src="${esc(src)}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen title="Development video"></iframe></div>`;
+    return `<video controls preload="metadata" playsinline style="width:100%;max-height:420px;border-radius:12px;background:#000" src="${esc(v)}"></video>`;
+  }
+  function videoPreviewHtml() { return listingVideo ? `<div style="margin-top:10px">${videoEmbed(listingVideo)}<button type="button" class="btn ghost sm" style="margin-top:8px" onclick="CODEVAPP.removeVideo()">✕ Remove video</button></div>` : ''; }
+  function renderVideoPreview() { const b = document.getElementById('videoPreview'); if (b) b.innerHTML = videoPreviewHtml(); }
+  function setVideoUrl(v) { listingVideo = (v || '').trim(); renderVideoPreview(); }
+  function removeVideo() { listingVideo = ''; const uf = document.getElementById('videoUrl'); if (uf) uf.value = ''; const fi = document.querySelector('input[type=file][accept="video/*"]'); if (fi) fi.value = ''; renderVideoPreview(); }
+  async function addVideo(input) { const f = input.files && input.files[0]; input.value = ''; if (!f) return;
+    if (f.size > MAX_VIDEO_MB * 1024 * 1024) { toast('Video too large — max ' + MAX_VIDEO_MB + 'MB. For a longer walkthrough, paste a YouTube or Vimeo link instead.'); return; }
+    const drop = input.closest('.photo-drop'); const label = drop && drop.querySelector('.pd-inner'); const prev = label && label.textContent;
+    if (label) label.textContent = 'Processing…';
+    try { listingVideo = await fileToDataURL(f); const uf = document.getElementById('videoUrl'); if (uf) uf.value = ''; renderVideoPreview(); }
+    catch (e) { toast('Could not read video'); }
+    finally { if (label && prev) label.textContent = prev; } }
+
   async function submitProperty(e) { e.preventDefault(); const f = e.target; const u = me();
     const btn = f.querySelector('button[type=submit],button:not([type])'); if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
-    try { const created = await db.properties.add({ title: f.title.value.trim(), developer: f.developer.value.trim(), location: f.location.value.trim(), address: f.address.value.trim(), items: (listingItems || []).filter(it => it.type), units: f.units.value, deliveryDate: f.deliveryDate.value, summary: f.summary.value.trim(), priceFrom: Number(f.priceFrom.value), stage: f.stage.value, images: listingPhotos.slice() });
+    try { const created = await db.properties.add({ title: f.title.value.trim(), developer: f.developer.value.trim(), location: f.location.value.trim(), address: f.address.value.trim(), items: (listingItems || []).filter(it => it.type), units: f.units.value, deliveryDate: f.deliveryDate.value, summary: f.summary.value.trim(), priceFrom: Number(f.priceFrom.value), stage: f.stage.value, images: listingPhotos.slice(), video: listingVideo || '' });
       // Upload any documents attached during creation, now that the listing has an id.
       const newId = Array.isArray(created) ? (created[0] && created[0].id) : (created && created.id);
       const staged = Object.keys(listingDocs || {});
@@ -663,7 +698,7 @@
         try { await db.documents.submit(newId, { key, label, fileData: listingDocs[key].fileData, fileName: listingDocs[key].fileName, fileType: listingDocs[key].fileType }); } catch (e) {} } }
       if (CFG.imagesUnavailable) toast('Listing submitted. (Photos need a quick backend setup before they save — see admin.)');
       else toast('Submitted! Admin will verify it before it goes public.' + (staged.length ? ' Documents attached.' : ''));
-      listingPhotos = []; renderPhotoPreviews(); listingDocs = {};
+      listingPhotos = []; listingVideo = ''; renderPhotoPreviews(); renderVideoPreview(); listingDocs = {};
       const mine = await db.properties.listMine(); const box = document.getElementById('mySubs'); if (box) box.innerHTML = listCards(mine);
       f.reset(); f.developer.value = u.name;
     } catch (err) { toast(err.message || 'Could not submit'); }
@@ -964,7 +999,7 @@
     window.scrollTo(0, 0);
   }
 
-  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, stageDoc, enterDealRoom, logDeal, onTypeChange, addItemDev, delItemDev, itemSetDev, itemSizeDev, itemCoordsDev, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, addDevDoc, viewDevDoc, addExtra, delExtra, extraSet, addExtraFile, devTxUnit, devTxAddPay, devTxPaySet, devTxDelPay, savePricing, saveEditListing, addEditMs, editMsSet, delEditMs, eoiChooser, developerInterest, buyerInterest, submitEoi, _afterAuth: null };
+  window.CODEVAPP = { openAuth, closeAuth, doSignin, doSignup, logout, submitProperty, submitDoc, stageDoc, enterDealRoom, logDeal, onTypeChange, addItemDev, delItemDev, itemSetDev, itemSizeDev, itemCoordsDev, postQuery, txUpload, express, submitQualify, qCurrency, legalInfo, confirmCode, resendCode, togglePass, addPhotos, removePhoto, setVideoUrl, addVideo, removeVideo, forgotFromSignin, forgotStart, doForgot, doReset, resendRecovery, filterOpps, openLightbox, lbNext, lbPrev, lbClose, addBrochure, saveDevProfile, viewBrochure, addDevDoc, viewDevDoc, addExtra, delExtra, extraSet, addExtraFile, devTxUnit, devTxAddPay, devTxPaySet, devTxDelPay, savePricing, saveEditListing, addEditMs, editMsSet, delEditMs, eoiChooser, developerInterest, buyerInterest, submitEoi, _afterAuth: null };
   // Session timeout → clean logout + re-login prompt (fired by the data layer on an expired JWT).
   window.addEventListener('codev:session-expired', () => {
     renderAuthArea();
