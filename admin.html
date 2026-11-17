@@ -746,11 +746,12 @@
   function dvOpen(d){ if(!d){toast('Not provided');return;} try{ const url=URL.createObjectURL(dvBlob(d)); window.open(url,'_blank','noopener'); setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(e){toast('Could not open file');} }
   function openDevFile(id,slot){ const a=ACCS.find(x=>x.id===id); dvOpen(a&&a[slot]); }
   function openDevExtra(id,i){ const a=ACCS.find(x=>x.id===id); const x=a&&Array.isArray(a.devExtras)?a.devExtras[i]:null; dvOpen(x&&x.file); }
-  function viewDev(id){ const a=ACCS.find(x=>x.id===id)||{}; $('#mTitle').textContent='Developer profile — '+(a.name||a.email||'');
+  function viewDev(id){ const a=ACCS.find(x=>x.id===id)||{}; const canA=can('manage_accounts'); $('#mTitle').textContent='Developer profile — '+(a.name||a.email||'');
     const row=(l,v)=>`<div class="spread" style="padding:7px 0;border-bottom:1px solid var(--line2);gap:12px"><span class="tiny muted">${l}</span><span class="tiny" style="font-weight:600;text-align:right">${v?esc(v):'—'}</span></div>`;
     const docRow=(l,slot)=>{ const has=a&&a[slot]; return `<div class="spread" style="padding:8px 0;border-bottom:1px solid var(--line2);gap:12px"><span class="tiny" style="font-weight:600">${l}</span>${has?`<button class="btn ghost sm" onclick="ADMIN.openDevFile('${id}','${slot}')">View ↗</button>`:'<span class="tiny muted">— not provided</span>'}</div>`; };
     const extras=Array.isArray(a.devExtras)?a.devExtras:[];
     $('#mBody').innerHTML=`
+      ${canA?`<div class="spread" style="margin:-4px 0 12px;gap:10px"><span class="tiny muted">Read-only view</span><button class="btn primary sm" onclick="ADMIN.editDev('${id}')">&#9998; Edit profile</button></div>`:''}
       ${row('Company / name',a.name)}${row('Email',a.email)}${row('Phone',a.phone)}${row('Website',a.website)}
       ${row('CAC / RC number',a.regNumber)}${row('Year established',a.yearEstablished)}${row('Head office',a.hqAddress)}
       <div style="margin:12px 0 4px;font-weight:700;color:#0f2233">About</div>
@@ -761,8 +762,73 @@
       ${extras.length?extras.map((x,i)=>`<div class="card pad" style="background:#fafafa;margin-bottom:8px"><div class="tiny" style="font-weight:700">${esc(x.label||('Item '+(i+1)))}</div>${x.note?`<div class="tiny" style="white-space:pre-wrap;margin-top:3px">${esc(x.note)}</div>`:''}${x.file?`<button class="btn ghost sm" style="margin-top:6px" onclick="ADMIN.openDevExtra('${id}',${i})">View attachment ↗</button>`:''}</div>`).join(''):'<span class="tiny muted">None added.</span>'}`;
     $('#modal').classList.add('show'); }
 
+  // ---------- Admin edits a developer's profile (manage_accounts) ----------
+  // The RLS "prof update admin" policy + guard trigger let an admin update a
+  // developer's non-privileged profile columns (role/status/permissions stay admin-gated,
+  // and are untouched here). Documents stage locally and apply on Save.
+  let DEVE=null;
+  const DEV_SLOTS=[['companyProfileDoc','company_profile_doc','Company profile document'],['cacDoc','cac_doc','CAC / incorporation documents'],['referencesDoc','references_doc','References'],['brochure','brochure','Brochure']];
+  function editDev(id){ const a=ACCS.find(x=>x.id===id)||{};
+    DEVE={ id, name:a.name||'', phone:a.phone||'', website:a.website||'', regNumber:a.regNumber||'', yearEstablished:a.yearEstablished||'', hqAddress:a.hqAddress||'', about:a.about||'',
+      extras:(Array.isArray(a.devExtras)?a.devExtras:[]).map(x=>({label:x.label||'',note:x.note||'',file:x.file||''})), docs:{} };
+    $('#mTitle').textContent='Edit developer profile — '+(a.name||a.email||''); renderDevEdit(); $('#modal').classList.add('show'); }
+  function captureDevForm(){ if(!DEVE) return; const f=$('#devForm'); if(!f) return; const E=f.elements; const gv=(n)=>{ const el=E[n]; return el?el.value:''; };
+    DEVE.name=gv('name'); DEVE.phone=gv('phone'); DEVE.website=gv('website'); DEVE.regNumber=gv('reg'); DEVE.yearEstablished=gv('year'); DEVE.hqAddress=gv('hq'); DEVE.about=gv('about');
+    (DEVE.extras||[]).forEach((x,i)=>{ const L=E['exl'+i], N=E['exn'+i]; if(L)x.label=L.value; if(N)x.note=N.value; }); }
+  function devEffDoc(slot){ const st=DEVE&&DEVE.docs[slot]; const a=ACCS.find(x=>x.id===DEVE.id)||{}; return st?(st.remove?'':st.data):(a[slot]||''); }
+  function renderDevEdit(){ const a=ACCS.find(x=>x.id===DEVE.id)||{};
+    const fld=(l,n,v,ph)=>`<div class="field"><label>${l}</label><input name="${n}" value="${esc(v||'')}"${ph?` placeholder="${ph}"`:''}></div>`;
+    const docEdit=(slot,col,label)=>{ const st=DEVE.docs[slot]; const eff=devEffDoc(slot);
+      const status= st ? (st.remove?'<span class="tiny" style="color:var(--red)">Will be removed on save</span>':'<span class="tiny" style="color:var(--green)">New file — save to apply</span>') : (a[slot]?'<span class="tiny muted">On file</span>':'<span class="tiny muted">— not provided</span>');
+      return `<div style="padding:9px 0;border-bottom:1px solid var(--line2)">
+        <div class="spread" style="gap:10px"><span class="tiny" style="font-weight:700">${label}</span><span style="white-space:nowrap">${eff?`<button type="button" class="btn ghost sm" onclick="ADMIN.devDocView('${slot}')">View ↗</button> `:''}${eff?`<button type="button" class="btn ghost sm" onclick="ADMIN.devDocClear('${slot}')">Remove</button>`:''}</span></div>
+        <div class="row" style="gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap"><input type="file" accept="application/pdf,image/*" onchange="ADMIN.devDoc('${slot}',this)"> ${status}</div></div>`; };
+    const extrasHtml=(DEVE.extras||[]).map((x,i)=>`<div class="card pad" style="background:#fafafa;margin-bottom:8px">
+        <div class="spread"><span class="tiny" style="font-weight:700">Item ${i+1}</span><button type="button" class="btn ghost sm danger" onclick="ADMIN.devExtraDel(${i})">Remove</button></div>
+        <div class="field"><label>Label</label><input name="exl${i}" value="${esc(x.label||'')}"></div>
+        <div class="field"><label>Note</label><textarea name="exn${i}" rows="2">${esc(x.note||'')}</textarea></div>
+        <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">${x.file?`<button type="button" class="btn ghost sm" onclick="ADMIN.devExtraView(${i})">View attachment ↗</button>`:'<span class="tiny muted">No attachment</span>'}<input type="file" accept="application/pdf,image/*" onchange="ADMIN.devExtraFile(${i},this)"></div></div>`).join('');
+    $('#mBody').innerHTML=`<form id="devForm" onsubmit="return ADMIN.saveDev(event,'${DEVE.id}')">
+      <div class="card pad" style="background:var(--soft);margin-bottom:12px"><b>${esc(a.email||'Developer account')}</b>
+        <div class="tiny muted">Role: ${esc(a.role||'developer')} &middot; Editing on the account holder&rsquo;s behalf. Role, status &amp; permissions are not changed here.</div></div>
+      ${fld('Company / name','name',DEVE.name)}
+      <div class="row" style="gap:10px"><div style="flex:1">${fld('Phone','phone',DEVE.phone)}</div><div style="flex:1">${fld('Website','website',DEVE.website,'https://')}</div></div>
+      <div class="row" style="gap:10px"><div style="flex:1">${fld('CAC / RC number','reg',DEVE.regNumber)}</div><div style="flex:1">${fld('Year established','year',DEVE.yearEstablished)}</div></div>
+      ${fld('Head office address','hq',DEVE.hqAddress)}
+      <div class="field"><label>About</label><textarea name="about" rows="4">${esc(DEVE.about||'')}</textarea></div>
+      <div style="margin:14px 0 2px;font-weight:700;color:#0f2233">Credentials &amp; documents <span class="tiny muted">(PDF/image, max 5MB)</span></div>
+      ${DEV_SLOTS.map(s=>docEdit(s[0],s[1],s[2])).join('')}
+      <div class="spread" style="margin:16px 0 6px"><span style="font-weight:700;color:#0f2233">Additional information</span><button type="button" class="btn ghost sm" onclick="ADMIN.devExtraAdd()">+ Add item</button></div>
+      ${extrasHtml||'<span class="tiny muted">None added.</span>'}
+      <div class="row" style="gap:10px;margin-top:16px"><button type="submit" class="btn primary" style="flex:1">Save profile</button><button type="button" class="btn" onclick="ADMIN.viewDev('${DEVE.id}')">Cancel</button></div>
+    </form>`; }
+  function devDocView(slot){ dvOpen(devEffDoc(slot)); }
+  function devDocClear(slot){ if(!DEVE)return; captureDevForm(); DEVE.docs[slot]={remove:true}; renderDevEdit(); }
+  async function devDoc(slot,inp){ const f=inp&&inp.files&&inp.files[0]; if(!f)return; if(f.size>5*1024*1024){ toast('File too large (max 5MB)'); inp.value=''; return; }
+    try{ captureDevForm(); const d=await fileToDataURLA(f); DEVE.docs[slot]={data:d}; renderDevEdit(); }catch(e){ toast('Could not read file'); } }
+  function devExtraView(i){ const x=DEVE&&DEVE.extras[i]; dvOpen(x&&x.file); }
+  function devExtraAdd(){ if(!DEVE)return; captureDevForm(); DEVE.extras.push({label:'',note:'',file:''}); renderDevEdit(); }
+  function devExtraDel(i){ if(!DEVE)return; captureDevForm(); DEVE.extras.splice(i,1); renderDevEdit(); }
+  async function devExtraFile(i,inp){ const f=inp&&inp.files&&inp.files[0]; if(!f)return; if(f.size>5*1024*1024){ toast('File too large (max 5MB)'); inp.value=''; return; }
+    try{ captureDevForm(); const d=await fileToDataURLA(f); DEVE.extras[i].file=d; renderDevEdit(); }catch(e){ toast('Could not read file'); } }
+  async function saveDev(e,id){ e.preventDefault(); if(!DEVE)return false; captureDevForm();
+    const btn=e.target.querySelector('button[type=submit]'); if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+    const nz=(s)=>{ s=(s||'').trim(); return s||null; };
+    const legacy={ name:nz(DEVE.name), phone:nz(DEVE.phone), website:nz(DEVE.website), about:nz(DEVE.about) };
+    const extra={ reg_number:nz(DEVE.regNumber), year_established:nz(DEVE.yearEstablished), hq_address:nz(DEVE.hqAddress),
+      dev_extras:(DEVE.extras||[]).filter(x=>(x.label||x.note||x.file)).map(x=>({label:x.label||'',note:x.note||'',file:x.file||''})) };
+    DEV_SLOTS.forEach(([slot,col])=>{ const st=DEVE.docs[slot]; if(st){ const val=st.remove?null:(st.data||null); if(slot==='brochure') legacy[col]=val; else extra[col]=val; } });
+    try{ await db.profiles.update(id, Object.assign({},legacy,extra)); closeModal(); toast('Developer profile updated'); await load(); }
+    catch(err){ const m=(err&&err.message)||'';
+      if(/column|schema cache|reg_number|year_established|hq_address|company_profile_doc|cac_doc|references_doc|dev_extras|PGRST/i.test(m)){
+        try{ await db.profiles.update(id, legacy); closeModal(); toast('Saved core fields — run PROFILE-ABOUT.sql to also store CAC/year/head-office/extra items.'); await load(); }
+        catch(e2){ if(btn){btn.disabled=false;btn.textContent='Save profile';} toast((e2&&e2.message)||'Save failed'); } }
+      else if(/not authorised|row-level security|permission|42501/i.test(m)){ if(btn){btn.disabled=false;btn.textContent='Save profile';} toast('Only an admin with “Manage accounts” can edit profiles.'); }
+      else { if(btn){btn.disabled=false;btn.textContent='Save profile';} toast(m||'Save failed'); } }
+    return false; }
+
   function closeModal(){ $('#modal').classList.remove('show'); }
-  window.ADMIN={login,lock,tab,setStatus,setSold,copyRef,onTypeChange,addItem,delItem,itemSet,itemSize,reviewDoc,uploadDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,txSetUnit,txAddPay,txPaySet,txDelPay,admAccess,delProp,editProp,saveProp,newProp,createProp,itemCoords,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,editAcctEmail,saveAcctEmail,setRole,toggleStatus,setAcctStatus,delAcc,viewDev,openDevFile,openDevExtra,closeModal,forgot,backToLogin,forgotSend,forgotReset,
+  window.ADMIN={login,lock,tab,setStatus,setSold,copyRef,onTypeChange,addItem,delItem,itemSet,itemSize,reviewDoc,uploadDoc,revokeAccess,reinstateAccess,dealLog,openQueries,postCounselQuery,resolveQuery,openReport,issueReport,openTx,createTx,setTxStatus,txAttach,completeTx,txSetUnit,txAddPay,txPaySet,txDelPay,admAccess,delProp,editProp,saveProp,newProp,createProp,itemCoords,reviewQ,saveQ,saveFx,addMs,delMs,msSet,addPay,delPay,paySet,addPhotos,delImg,makeCover,addAcc,saveAcc,editAcctEmail,saveAcctEmail,setRole,toggleStatus,setAcctStatus,delAcc,viewDev,openDevFile,openDevExtra,editDev,saveDev,devDoc,devDocView,devDocClear,devExtraAdd,devExtraDel,devExtraFile,devExtraView,closeModal,forgot,backToLogin,forgotSend,forgotReset,
     addAdmin,admTab,saveAdmin,editRights,saveRights,revokeAdmin,applyPreset,filterProps,
     loadApplications,reviewEoi,eoiFilter,saveEoi};
 
