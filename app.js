@@ -250,7 +250,7 @@
       <div class="row" style="justify-content:flex-start;gap:10px;margin-top:12px"><button class="btn primary" onclick="CODEVAPP.developerInterest()">Submit Developer Interest</button><button class="btn" onclick="CODEVAPP.buyerInterest()">Register Your Interest</button></div>
       <div style="display:flex;justify-content:flex-start">${flowStrip()}</div>
       <div class="hero-stats">
-        <div><div class="n">4</div><div class="l">Curated prime markets<br><span style="opacity:.72">Lagos today · UK/US roadmap</span></div></div>
+        <div><div class="n">Nationwide</div><div class="l">Prime markets across Nigeria<br><span style="opacity:.72">Lagos to Abuja · UK/US roadmap</span></div></div>
         <div><div class="n">${opps.length}</div><div class="l">Curated opportunities</div></div>
         <div><div class="n">${devCount}</div><div class="l">Verified developers</div></div>
         <div><div class="n">Milestone</div><div class="l">Escrow-governed funding</div></div>
@@ -304,7 +304,7 @@
         <form class="card pad" onsubmit="return CODEVAPP.submitProperty(event)">
           <div class="field"><label>Property / development title</label><input name="title" required></div>
           <div class="field"><label>Developer / owner name</label><input name="developer" value="${esc(u.name)}" required></div>
-          <div class="field"><label>Location <span class="tiny muted">(area — used for buyer filters)</span></label><input name="location" list="locOptions" placeholder="e.g. Lagos - Lekki" required autocomplete="off">
+          <div class="field"><label>Location <span class="tiny muted">(area — used for buyer filters)</span></label><input name="location" list="locOptions" placeholder="e.g. Abuja - Maitama" required autocomplete="off">
             <datalist id="locOptions">${(CFG.LOCATIONS || []).map(l => `<option value="${esc(l)}"></option>`).join('')}</datalist>
             <span class="tiny muted">Pick a suggestion or type a new area — it becomes filterable for buyers.</span></div>
           <div class="field"><label>Address <span class="tiny muted">(full project address)</span></label><input name="address" placeholder="Street, area, city, state"></div>
@@ -732,7 +732,7 @@
         <div class="field"><label>Investor type</label>${sel('investorType', INVESTOR_TYPES, 'required')}</div>
         <div class="field"><label>Interested unit / property type <span class="tiny muted">(optional)</span></label><input name="unitType" placeholder="e.g. 3-bed apartment, whole floor, SPV participation…"></div>
         <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Phone / WhatsApp</label><input name="phone"></div><div class="field" style="flex:1;min-width:120px"><label>Country of residence</label><input name="country"></div></div>
-        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Interest</label>${sel('interest', ['Buy Property', 'Co-Develop', 'Explore Opportunities'])}</div><div class="field" style="flex:1;min-width:120px"><label>Preferred location <span class="tiny muted">(optional)</span></label><input name="preferredLocation" placeholder="e.g. Lekki, Ikoyi…"></div></div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Interest</label>${sel('interest', ['Buy Property', 'Co-Develop', 'Explore Opportunities'])}</div><div class="field" style="flex:1;min-width:120px"><label>Preferred location <span class="tiny muted">(optional)</span></label><input name="preferredLocation" placeholder="e.g. Lagos, Abuja, Port Harcourt…"></div></div>
         <div class="row" style="gap:10px"><div class="field" style="flex:2;min-width:150px"><label>Investment / purchase amount</label><select name="amountBand" id="qAmount" required>${amtOpts}</select></div><div class="field" style="flex:1;min-width:90px"><label>Currency</label><select name="currency" id="qCurrency" onchange="CODEVAPP.qCurrency(this.value)">${optionList(CURRENCIES)}</select></div></div>
         <div class="field"><label>Investment objective</label>${sel('objective', OBJECTIVES, 'required')}</div>
         <div class="field"><label>Investment readiness</label>${sel('readiness', READINESS, 'required')}</div>
@@ -794,7 +794,7 @@
         <p class="tiny muted" style="margin:10px 0 8px;font-weight:700;letter-spacing:.04em;text-transform:uppercase">Development</p>
         <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Development category</label><select name="category" required>${optionList(DEV_CATEGORIES)}</select></div><div class="field" style="flex:1;min-width:120px"><label>Project status</label><select name="projectStatus" required>${optionList(DEV_PROJECT_STATUS)}</select></div></div>
         <div class="field"><label>Property types</label><input name="propertyTypes" placeholder="e.g. Apartments, Duplexes, Terraces…"></div>
-        <div class="field"><label>Development location (state, city, area)</label><input name="location" placeholder="e.g. Lagos, Lekki, Phase 1"></div>
+        <div class="field"><label>Development location (state, city, area)</label><input name="location" placeholder="e.g. FCT, Abuja, Maitama"></div>
         <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:110px"><label>Estimated units</label><input name="units" inputmode="numeric"></div><div class="field" style="flex:1;min-width:150px"><label>Indicative price range</label><input name="priceRange" placeholder="e.g. ₦45m – ₦120m"></div></div>
         <div class="field"><label>Nature of interest</label><select name="nature" required>${optionList(DEV_NATURE)}</select></div>
         <div class="field"><label>Brief project description</label><textarea name="description" rows="3"></textarea></div>
@@ -809,7 +809,7 @@
         <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Full name</label><input name="fullName" required></div><div class="field" style="flex:1;min-width:140px"><label>Email</label><input name="email" type="email" required></div></div>
         <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Phone / WhatsApp</label><input name="phone" required></div><div class="field" style="flex:1;min-width:120px"><label>Country of residence</label><input name="country" required></div></div>
         <div class="field"><label>I would like to…</label><select name="interest" required>${optionList(BUYER_INTEREST)}</select></div>
-        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Preferred property type</label><input name="preferredType" placeholder="e.g. 3-bed apartment, land…"></div><div class="field" style="flex:1;min-width:130px"><label>Preferred location</label><input name="preferredLocation" placeholder="e.g. Lekki, Ikoyi…"></div></div>
+        <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:130px"><label>Preferred property type</label><input name="preferredType" placeholder="e.g. 3-bed apartment, land…"></div><div class="field" style="flex:1;min-width:130px"><label>Preferred location</label><input name="preferredLocation" placeholder="e.g. Lagos, Abuja, Port Harcourt…"></div></div>
         <div class="row" style="gap:10px"><div class="field" style="flex:1;min-width:120px"><label>Indicative budget</label><input name="budget" placeholder="e.g. ₦60m / $120k"></div><div class="field" style="flex:1;min-width:120px"><label>Funding preference</label><select name="funding">${optionList(BUYER_FUNDING)}</select></div></div>
         <div class="field"><label>Expected timeline</label><select name="timeline">${optionList(BUYER_TIMELINE)}</select></div>
         <div class="field"><label>Additional comments</label><textarea name="comments" rows="3"></textarea></div>

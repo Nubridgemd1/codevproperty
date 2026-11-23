@@ -19,7 +19,9 @@ window.CODEV = (function () {
                 'Lagos - Ajah', 'Lagos - Ikeja GRA', 'Lagos - Ikeja', 'Lagos - Yaba', 'Lagos - Magodo',
                 'Lagos - Ogudu', 'Lagos - Gbagada', 'Lagos - Surulere', 'Lagos - Epe', 'Lagos - Ibeju-Lekki',
                 'Abuja - Maitama', 'Abuja - Asokoro', 'Abuja - Wuse 2', 'Abuja - Jabi', 'Abuja - Gwarinpa',
-                'Port Harcourt', 'Ibadan', 'Enugu', 'Abeokuta', 'Kano'],
+                'Port Harcourt', 'Port Harcourt - GRA', 'Ibadan', 'Enugu', 'Abeokuta', 'Kano',
+                'Benin City', 'Uyo', 'Owerri', 'Kaduna', 'Calabar', 'Jos', 'Warri', 'Asaba',
+                'Awka', 'Akure', 'Ilorin', 'Abuja - Lokogoma', 'Abuja - Lugbe', 'Abuja - Kubwa'],
     STAGES: ['Land / Commencement', 'Foundation', 'Structural Frame', 'Building Envelope',
              'Mechanical & Electrical', 'Finishing', 'Completion / Handover'],
     // Property types for the listing entry (admin + developer submission).
