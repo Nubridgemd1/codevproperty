@@ -250,7 +250,7 @@
       <div class="row" style="justify-content:flex-start;gap:10px;margin-top:12px"><button class="btn primary" onclick="CODEVAPP.developerInterest()">Submit Developer Interest</button><button class="btn" onclick="CODEVAPP.buyerInterest()">Register Your Interest</button></div>
       <div style="display:flex;justify-content:flex-start">${flowStrip()}</div>
       <div class="hero-stats">
-        <div><div class="n">Nationwide</div><div class="l">Prime markets across Nigeria<br><span style="opacity:.72">Lagos to Abuja · UK/US roadmap</span></div></div>
+        <div><div class="n">Nationwide</div><div class="l">Prime markets across Nigeria<br><span style="opacity:.72">Lagos · Abuja · Port Harcourt &amp; beyond</span></div></div>
         <div><div class="n">${opps.length}</div><div class="l">Curated opportunities</div></div>
         <div><div class="n">${devCount}</div><div class="l">Verified developers</div></div>
         <div><div class="n">Milestone</div><div class="l">Escrow-governed funding</div></div>
